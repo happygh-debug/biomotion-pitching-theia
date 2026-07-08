@@ -1,0 +1,1 @@
+../../../dashboard_core/etdiag.js

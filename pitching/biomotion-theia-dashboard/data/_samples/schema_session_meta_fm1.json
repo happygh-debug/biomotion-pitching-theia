@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "biomotion/session_meta_fm1",
+  "title": "Fatigue session metadata (fm1)",
+  "description": "fatigue_vs_fresh 조건축용 세션 메타 — picker·axisSlices 연동 전 스키마",
+  "type": "object",
+  "required": ["version"],
+  "properties": {
+    "version": { "const": "fm1" },
+    "session_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "note": { "type": "string" },
+    "rpe": { "type": "number", "minimum": 0, "maximum": 10 },
+    "rpe_scale": { "type": "string" },
+    "inning": { "type": ["integer", "null"] },
+    "pitch_count": { "type": "integer", "minimum": 0 },
+    "session_block": {
+      "enum": ["bullpen", "live_bp", "game", "rehab", null]
+    },
+    "elapsed_min": { "type": "number", "minimum": 0 },
+    "fresh_window": {
+      "type": "object",
+      "properties": {
+        "trial_indices": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "pitch_nos": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+        "note": { "type": "string" }
+      }
+    },
+    "fatigued_window": {
+      "type": "object",
+      "properties": {
+        "trial_indices": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+        "pitch_nos": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+        "note": { "type": "string" }
+      }
+    },
+    "trial_tags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["trial_index", "tag"],
+        "properties": {
+          "trial_index": { "type": "integer", "minimum": 0 },
+          "tag": { "enum": ["fresh", "fatigued", "neutral"] },
+          "source": { "type": "string" }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "source": { "type": "string" },
+        "recorded_by": { "type": "string" }
+      }
+    }
+  },
+  "anyOf": [
+    { "required": ["fresh_window"] },
+    { "required": ["fatigued_window"] },
+    { "required": ["trial_tags"] }
+  ]
+}

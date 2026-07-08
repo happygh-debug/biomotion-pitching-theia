@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>동작 뷰어 · 3D 스틱 · 시계열</title>
+<style>
+  :root{--bg:#070D1A;--panel:#0E1626;--panel2:#142133;--line:#243150;--text:#F4F7FD;--sub:#9DB0CC;--faint:#5E7196;--gold:#E7B53C;--good:#56C596;--bad:#E8635A;--warn:#E0a93a;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Saira',-apple-system,system-ui,sans-serif;overflow:hidden}
+  #app{display:flex;flex-direction:column;height:100vh;width:100vw}
+  .tbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .seg{display:flex;gap:4px}
+  .btn{font-family:inherit;background:var(--panel2);color:var(--sub);border:1px solid var(--line);border-radius:7px;padding:6px 11px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .btn:hover{border-color:var(--gold)}
+  .btn.on{background:var(--gold);color:var(--bg);border-color:var(--gold)}
+  .btn.mode.on{background:var(--good);border-color:var(--good)}
+  #tsSel{max-width:260px}
+  .spacer{flex:1}
+  .lbl{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-right:2px}
+  #main{flex:1;display:flex;min-height:0}
+  #scenewrap{flex:1;position:relative;min-width:0}
+  #scene{position:absolute;inset:0}
+  #labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .jlabel{position:absolute;transform:translate(-50%,-50%);font-size:12px;font-weight:700;color:#fff;text-shadow:0 0 4px #000,0 0 4px #000;white-space:nowrap}
+  .jlabel small{font-size:9px;color:var(--sub);font-weight:600}
+  #legend{position:absolute;left:10px;top:8px;font-size:11px;color:var(--sub);background:rgba(7,13,26,.6);border:1px solid var(--line);border-radius:7px;padding:6px 9px;line-height:1.55}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+  #cmpName{position:absolute;right:10px;top:8px;font-size:12px;text-align:right;line-height:1.5}
+  #ballNote{position:absolute;left:10px;bottom:8px;font-size:11px;color:#9DB0CC;background:rgba(9,13,26,.55);border:1px solid #26324a;border-radius:7px;padding:4px 9px;line-height:1.4;max-width:min(560px,72%)}
+  #rpsBox{position:absolute;right:10px;top:64px;display:none;background:rgba(9,13,26,.78);border:1px solid #2b3a58;border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.55;color:#cfe0f5;min-width:210px}
+  #rpsBox .t{font-weight:800;color:#E8C56A;font-size:12.5px;margin-bottom:2px}
+  #rpsBox .r{display:flex;justify-content:space-between;gap:14px} #rpsBox .r b{color:#fff;font-family:ui-monospace,monospace}
+  #rpsBox .b2{margin-top:6px;padding-top:5px;border-top:1px dashed #2b3a58} #rpsBox .b2 .t{color:#49E0C0}
+  #rpsBox .note{margin-top:4px;color:#5d6b82;font-size:10px}
+  #side{width:218px;background:var(--panel);border-left:1px solid var(--line);padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:9px}
+  .gauge{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  .gauge .gl{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:var(--faint);margin-bottom:5px}
+  .gauge .gv{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+  .track{height:7px;background:#0a1220;border-radius:4px;position:relative;overflow:hidden}
+  .fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+  .pk{position:absolute;top:-2px;width:2px;height:11px;background:#fff;opacity:.7}
+  #ts{height:170px;background:var(--panel);border-top:1px solid var(--line);position:relative}
+  #tscv{position:absolute;inset:0;width:100%;height:100%}
+  #tsleg{position:absolute;left:10px;top:6px;font-size:10.5px;color:var(--sub);line-height:1.5;pointer-events:none}
+  .play{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--panel);border-top:1px solid var(--line)}
+  #scrubWrap{position:relative;flex:1;height:36px;display:flex;align-items:flex-end;padding-top:15px}
+  #scrub{width:100%;accent-color:var(--gold);position:relative;z-index:2}
+  #scrubMarks{position:absolute;left:0;right:0;top:0;bottom:8px;pointer-events:none;z-index:1}
+  .scrubMark{position:absolute;top:0;transform:translateX(-50%);height:22px;border-left:1px dashed rgba(231,181,60,.65)}
+  .scrubMark span{position:absolute;top:-1px;left:3px;font-size:9px;font-weight:700;color:var(--gold);white-space:nowrap;text-shadow:0 1px 2px #000}
+  #pp{width:34px;height:34px;border-radius:50%;border:1px solid var(--gold);background:var(--panel2);color:var(--gold);font-size:15px;cursor:pointer;flex-shrink:0}
+  #tread{font-size:12px;color:var(--sub);min-width:118px;text-align:right;font-variant-numeric:tabular-nums}
+  .evtick{color:var(--gold)}
+  #err{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:#fff;padding:24px;text-align:center;font-size:14px}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<style id="bm-bare">body.bare .tbar,body.bare #ts,body.bare .play{display:none !important;}body.bare #main{height:100vh !important;}</style></head>
+<body>
+<div id="app">
+  <div class="tbar">
+    <span class="lbl">모드</span>
+    <div class="seg" id="modes">
+      <button class="btn mode on" data-m="1">① 단일 스틱</button>
+      <button class="btn mode" data-m="2">② 스틱+시계열</button>
+      <button class="btn mode" data-m="3">③ 선수 비교</button>
+    </div>
+    <span class="lbl">선수</span>
+    <select class="btn" id="selA"></select>
+    <select class="btn" id="selB" style="display:none"></select>
+    <span id="ptBtns" style="display:none;align-items:center;gap:4px;margin-left:6px;flex-wrap:wrap"></span>
+    <span class="spacer"></span>
+    <span class="lbl">시점</span>
+    <div class="seg" id="views">
+      <button class="btn on" data-v="side">측면</button>
+      <button class="btn" data-v="front">전면</button>
+      <button class="btn" data-v="top">탑뷰</button>
+    </div>
+    <span class="lbl" style="margin-left:8px">배속</span>
+    <div class="seg" id="speeds">
+      <button class="btn on" data-s="0.1">0.1×</button>
+      <button class="btn" data-s="1">1.0×</button>
+    </div>
+    <span class="lbl" style="margin-left:8px">그래프</span>
+    <select class="btn" id="tsSel"></select>
+  </div>
+
+  <div id="main">
+    <div id="scenewrap">
+      <div id="scene"></div>
+      <div id="labels"></div>
+      <div id="legend"></div>
+      <div id="cmpName"></div>
+      <div id="ballNote">● <b>흰 공(빨간 실밥)</b> = 던지는 손 · 릴리스 후 <b style="color:#E0303A">빨간 궤적</b> = 공 비행(표기 구속·중력 기반 <b>추정</b>, 실제 공 트래킹 아님)</div>
+      <div id="rpsBox"></div>
+      <div id="err"></div>
+    </div>
+    <div id="side"></div>
+  </div>
+
+  <div id="ts"><canvas id="tscv"></canvas><div id="tsleg"></div></div>
+
+  <div class="play">
+    <button id="pp">▶</button>
+    <div id="scrubWrap">
+      <div id="scrubMarks"></div>
+      <input id="scrub" type="range" min="0" max="1000" value="0"/>
+    </div>
+    <span id="tread">—</span>
+  </div>
+</div>
+
+<script>window.VIEWER_MANIFEST = {"version":"ku-theia-4ca3aa4f785f","order":["홍은성","홍주환","정휘진","정원진","김범근","김동환","김준영","오훈택","박경도","유재동"],"players":{"홍은성":{"label":"홍은성","name":"홍은성","velo":"140.1","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.78,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":447,"file":"데이터/frames/p0001.json?v=b719f42639c7","pitchType":"포심","variants":["홍은성·슬라이더","홍은성·커브","홍은성·체인지업"]},"홍은성·슬라이더":{"label":"홍은성·슬라이더","name":"홍은성","velo":"120.0","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.78,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":456,"file":"데이터/frames/p0002.json?v=bd082cdc1135","pitchType":"슬라이더","variantOf":"홍은성"},"홍은성·커브":{"label":"홍은성·커브","name":"홍은성","velo":"113.5","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.78,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":451,"file":"데이터/frames/p0003.json?v=0e5935666cbc","pitchType":"커브","variantOf":"홍은성"},"홍은성·체인지업":{"label":"홍은성·체인지업","name":"홍은성","velo":"127.7","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.78,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":449,"file":"데이터/frames/p0004.json?v=ef32333bd779","pitchType":"체인지업","variantOf":"홍은성"},"홍주환":{"label":"홍주환","name":"홍주환","velo":"139.7","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.73,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":371,"file":"데이터/frames/p0005.json?v=4d1e0b955781","pitchType":"포심","variants":["홍주환·커브","홍주환·체인지업"]},"홍주환·커브":{"label":"홍주환·커브","name":"홍주환","velo":"115.0","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.73,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":365,"file":"데이터/frames/p0006.json?v=82204c2572f9","pitchType":"커브","variantOf":"홍주환"},"홍주환·체인지업":{"label":"홍주환·체인지업","name":"홍주환","velo":"114.2","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.73,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":367,"file":"데이터/frames/p0007.json?v=c05180c4fc83","pitchType":"체인지업","variantOf":"홍주환"},"정휘진":{"label":"정휘진","name":"정휘진","velo":"138.9","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.8,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":351,"file":"데이터/frames/p0008.json?v=e9f2b4fcda1e","pitchType":"포심","variants":["정휘진·슬라이더","정휘진·커브"]},"정휘진·슬라이더":{"label":"정휘진·슬라이더","name":"정휘진","velo":"124.1","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.8,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":354,"file":"데이터/frames/p0009.json?v=8dbadea28611","pitchType":"슬라이더","variantOf":"정휘진"},"정휘진·커브":{"label":"정휘진·커브","name":"정휘진","velo":"116.1","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.8,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":352,"file":"데이터/frames/p0010.json?v=5213d5250c6f","pitchType":"커브","variantOf":"정휘진"},"정원진":{"label":"정원진","name":"정원진","velo":"133.8","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.81,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":363,"file":"데이터/frames/p0011.json?v=638b06091282","pitchType":"포심","variants":["정원진·슬라이더","정원진·체인지업"]},"정원진·슬라이더":{"label":"정원진·슬라이더","name":"정원진","velo":"120.3","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.81,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":362,"file":"데이터/frames/p0012.json?v=ac7ac95d23ed","pitchType":"슬라이더","variantOf":"정원진"},"정원진·체인지업":{"label":"정원진·체인지업","name":"정원진","velo":"116.6","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.81,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":373,"file":"데이터/frames/p0013.json?v=7209b261b379","pitchType":"체인지업","variantOf":"정원진"},"김범근":{"label":"김범근","name":"김범근","velo":"134.7","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.8,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":379,"file":"데이터/frames/p0014.json?v=b92130f987b4","pitchType":"포심","variants":["김범근·커브","김범근·체인지업"]},"김범근·커브":{"label":"김범근·커브","name":"김범근","velo":"106.5","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.8,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":374,"file":"데이터/frames/p0015.json?v=7f00e6e368bd","pitchType":"커브","variantOf":"김범근"},"김범근·체인지업":{"label":"김범근·체인지업","name":"김범근","velo":"119.8","hand":"L","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.8,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":373,"file":"데이터/frames/p0016.json?v=6b1b2f64bc40","pitchType":"체인지업","variantOf":"김범근"},"김동환":{"label":"김동환","name":"김동환","velo":"129.4","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.82,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":367,"file":"데이터/frames/p0017.json?v=e97c11c81e8b","pitchType":"포심","variants":["김동환·슬라이더","김동환·체인지업"]},"김동환·슬라이더":{"label":"김동환·슬라이더","name":"김동환","velo":"119.9","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.82,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":371,"file":"데이터/frames/p0018.json?v=6d92b34cf238","pitchType":"슬라이더","variantOf":"김동환"},"김동환·체인지업":{"label":"김동환·체인지업","name":"김동환","velo":"122.1","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.82,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":371,"file":"데이터/frames/p0019.json?v=84f9bd3ce1e4","pitchType":"체인지업","variantOf":"김동환"},"김준영":{"label":"김준영","name":"김준영","velo":"138","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.78,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":407,"file":"데이터/frames/p0020.json?v=3cdf4d70ee0f","variants":[]},"오훈택":{"label":"오훈택","name":"오훈택","velo":"137.5","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.81,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":525,"file":"데이터/frames/p0021.json?v=8eabfbe08615","variants":[]},"박경도":{"label":"박경도","name":"박경도","velo":"139.6","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.87,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":355,"file":"데이터/frames/p0022.json?v=b5476fa33bd7","pitchType":"포심","variants":["박경도·슬라이더","박경도·커브","박경도·스플리터"]},"박경도·슬라이더":{"label":"박경도·슬라이더","name":"박경도","velo":"124.0","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.87,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":356,"file":"데이터/frames/p0023.json?v=88fd575253b4","pitchType":"슬라이더","variantOf":"박경도"},"박경도·커브":{"label":"박경도·커브","name":"박경도","velo":"116.0","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.87,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":356,"file":"데이터/frames/p0024.json?v=8f44be643536","pitchType":"커브","variantOf":"박경도"},"박경도·스플리터":{"label":"박경도·스플리터","name":"박경도","velo":"128.7","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.87,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":359,"file":"데이터/frames/p0025.json?v=9f6b61561600","pitchType":"스플리터","variantOf":"박경도"},"유재동":{"label":"유재동","name":"유재동","velo":"130.8","hand":"R","group":"고려대","fps":250.0,"dt":0.004,"height_m":1.8,"mass_kg":80.0,"ground_y_m":0.0,"canon":true,"n":381,"file":"데이터/frames/p0026.json?v=2c42e172e670","variants":[]}}};</script>
+<script>
+if(!window.VIEWER_MANIFEST){
+  document.write('<script src="../dashboard/데이터/integ01_phase2_frames.js?v=7c3fa6724b"><\\/script>');
+}
+</script><!-- INTEG-01 Phase 2: 세션 frame 등록·fallback -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const MANIFEST = window.VIEWER_MANIFEST || {};
+const META = MANIFEST.players || {};
+const D = {};
+const ORDER = MANIFEST.order || Object.keys(META || {});
+const errEl = document.getElementById('err');
+if(!ORDER.length){ errEl.style.display='flex'; errEl.textContent='데이터 로드 실패 (선수 목록 누락)'; }
+let playerA = ORDER.indexOf('서초율')>=0?'서초율':(ORDER.indexOf('fast')>=0?'fast':ORDER[0]);
+let playerB = ORDER.indexOf('박로건')>=0?'박로건':(ORDER.indexOf('elite')>=0?'elite':(ORDER[1]||ORDER[0]));
+
+// ---------- landmark / bones ----------
+let LM = [];
+let IDX = {};
+let skelA = null, skelB = null;
+function setLoading(msg){ if(errEl){ errEl.style.display='flex'; errEl.textContent=msg; } }
+function clearLoading(){ if(errEl){ errEl.style.display='none'; errEl.textContent=''; } }
+function showFatal(err){ if(errEl){ errEl.style.display='flex'; errEl.textContent='렌더 오류: '+(err&&err.message?err.message:err); } console.error(err); }
+function setLandmarks(trial){
+  if(LM.length || !trial || !trial.LM) return;
+  LM = trial.LM;
+  IDX = {};
+  LM.forEach((k,i)=>IDX[k]=i);
+}
+function detectLead(t){
+  const f=t.frames, a=f[0][IDX.com]||f[0][IDX.pelvis_o], b=f[f.length-1][IDX.com]||f[f.length-1][IDX.pelvis_o];
+  const sx=b[0]-a[0], sz=b[2]-a[2]; const fr=f[t.events.i_br||f.length-1];
+  const pr=p=>p?(p[0]*sx+p[2]*sz):-1e9;
+  return pr(fr[IDX.r_toe]||fr[IDX.r_heel]) > pr(fr[IDX.l_toe]||fr[IDX.l_heel]) ? 'r':'l';
+}
+function initTrial(key, trial){
+  setLandmarks(trial);
+  trial._throw=(trial.hand||'L').toUpperCase()==='L'?'l':'r'; trial._glove=trial._throw==='l'?'r':'l'; _assertThrowHand(trial,key); /* HAND-FIX */
+  trial._lead=detectLead(trial); trial._rear=trial._lead==='r'?'l':'r';
+  if(!trial.label) trial.label = (META[key]&&META[key].label) || trial.name || key;
+  if(!trial.velo && META[key]&&META[key].velo) trial.velo = META[key].velo;
+  return trial;
+}
+// UNICODE-PATHFIX: 일부 정적 호스트(현 Netlify 배포)는 한글 경로(데이터/)를 NFD 로 저장하는데
+//   소스 fetch 경로는 NFC 라 NFC 요청이 NFD 파일과 바이트 불일치 → 404(스틱 프레임 로드 실패).
+//   그래서 원본·NFD·NFC 형태를 차례로 시도(이미 일치/ASCII 면 첫 시도 성공 — 무해).
+async function fetchNorm(url){
+  const tries=[url];
+  try{ const a=url.normalize('NFD'); if(tries.indexOf(a)<0) tries.push(a); }catch(e){}
+  try{ const b=url.normalize('NFC'); if(tries.indexOf(b)<0) tries.push(b); }catch(e){}
+  let last={ok:false,status:404};
+  for(const u of tries){
+    let res; try{ res=await fetch(u); }catch(e){ continue; }
+    if(res.ok) return res;
+    last=res;
+  }
+  return last;
+}
+async function ensurePlayer(key){
+  if(!key) return null;
+  if(D[key]) return D[key];
+  const meta = META[key];
+  // INTEG-01 Phase 2: 정적 경로 없음(세션 선수) 또는 fetch 실패 시 세션 frame 으로 fallback.
+  const sessionTrial = ()=>{ try{ const FB=window.BM_INTEG01_FRAMES; return FB&&FB.loadFrames?FB.loadFrames(key):null; }catch(e){ return null; } };
+  if(!meta || !meta.file){
+    const t = sessionTrial();
+    if(t){ D[key] = initTrial(key, t); clearLoading(); return D[key]; }
+    throw new Error('선수 데이터 경로 없음: '+key);
+  }
+  setLoading('선수 데이터 로드 중 · '+((meta.label||meta.name||key)));
+  try{
+    const res = await fetchNorm(meta.file);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const trial = await res.json();
+    D[key] = initTrial(key, trial);
+    clearLoading();
+    return D[key];
+  }catch(err){
+    const t = sessionTrial();
+    if(t){ D[key] = initTrial(key, t); clearLoading(); return D[key]; }
+    throw new Error('선수 데이터 로드 실패: '+key+' ('+(err&&err.message?err.message:err)+')');
+  }
+}
+async function ensureActivePlayers(){
+  const A = await ensurePlayer(playerA);
+  if(mode===3) await ensurePlayer(playerB);
+  return A;
+}
+// 좌표는 추출 단계(extract_viewer_data._canon)에서 이미 해부학적 정규 자세로 정렬됨:
+//   up=머리−발(+Y) · facing=stride(+Z) · 뒷발 시작점=원점 · 지면=0 · 힘 벡터 동일 회전.
+//   → JS 추가 회전 불필요. 미러 없는 순수 회전이라 좌/우완 손잡이는 데이터에 그대로 보존.
+// 트라이얼별 손잡이·앞발 자동판정 (서초율·박로건=좌투, 문서준·이영하=우투 — 혼재)
+function isLHP(t){ return ((t&&t.hand)||'R').toString().toUpperCase().charAt(0)==='L'; }
+function mirrorX(x,t){ return -x; } /* [CHIRALITY-ROOT-FIX 2026-07-05] ★수개월 반복 오독의 근본 원인 확정·수정.
+   베이크 canonical 좌표는 왼손 좌표계(축 변환 시 반전 미보정)라 오른손계 렌더러(three.js)에 직결하면
+   전신이 해부학적 거울상으로 그려짐 — 정원진(좌투)의 왼팔이 화면상 '오른팔 자리'에 렌더(교수 지적이 정확했음).
+   증명: 오른손계에서 홈(+Z)향 투수의 해부학적 오른쪽 = F×U = −X. 그런데 데이터는 우투 던지는손(r)=+X·
+   좌투(l)=−X = 정반대 ⇒ 전역 X반전으로 오른손계 복원(KU 10/10 BR 시점 해부학 정합 검증 완료).
+   ※2026-06-14 '미러 제거' 근거였던 검증(라벨-움직임 일치·X부호 관례)은 거울반전에 불변이라 이 결함을 못 잡았음.
+   렌더 소비자는 전부 viewPoint/viewVec 경유(관절·본·트레일·러버앵커·strideAxis·공비행) — 단서류도 경유 필수. */
+function viewPoint(p,t){ return p ? [mirrorX(p[0],t), p[1], p[2]] : p; }
+function viewVec(v,t){ return v ? [mirrorX(v[0],t), v[1], v[2]] : v; }
+// HAND-FIX 가드: 데이터에서 던지는 팔을 판정해 hand·미러와 대조(불일치 시 console.error).
+// 손목 총 이동거리(path length)로 판정 — max 단일프레임 속도는 트래킹 스파이크에 취약(김수겸 오탐).
+// 마진(1.12배) 미만이면 null(판정 보류 → 오탐 방지).
+function _detectThrowArm(t){
+  try{
+    var f=t&&t.frames; if(!f||f.length<5) return null;
+    function pathlen(side){ var k=IDX[side+'_wrist']; if(k==null) return -1; var s=0,prev=null;
+      for(var i=0;i<f.length;i++){ var p=f[i][k];
+        if(p&&prev){ var dx=p[0]-prev[0],dy=p[1]-prev[1],dz=p[2]-prev[2]; s+=Math.sqrt(dx*dx+dy*dy+dz*dz); }
+        if(p)prev=p; }
+      return s; }
+    var L=pathlen('l'), R=pathlen('r'); if(L<=0||R<=0) return null;
+    var hi=Math.max(L,R), lo=Math.min(L,R); if(hi < lo*1.12) return null;
+    return (L>R)?'l':'r';
+  }catch(e){ return null; }
+}
+function _assertThrowHand(t,key){
+  try{
+    var nm=(t&&(t.label||t.name))||key;
+    var byData=_detectThrowArm(t);
+    if(byData && t._throw && byData!==t._throw)
+      console.error('[HAND] '+nm+': hand="'+t.hand+'"(_throw='+t._throw+')인데 데이터상 던지는팔='+byData+' — 손잡이 메타/데이터 불일치');
+    /* [CHIRALITY-ROOT-FIX] 가드 반전: canonical 데이터=왼손계라 X-미러(−x)가 해부학 복원의 필수 조건.
+       미러가 빠지면(항등) 전신 거울상(좌투가 우투로) 재발 → 즉시 경보. */
+    if(typeof mirrorX==='function' && mirrorX(1,t)!==-1)
+      console.error('[HAND] '+nm+': X-미러 누락 — canonical(왼손계) 데이터는 mirrorX(x)=-x 필수. 항등이면 전신 거울상(좌투=우투로 보임) 재발.');
+  }catch(e){}
+}
+const C = { THROW:0xFF6B47, GLOVE:0xC084FC, SPINE:0xFF5AE8, LEAD:0x7DDFFF, REAR:0xFFD166, TORSO:0x52688F, SHO:0x60A5FA, HIP:0xBEF264, GHOST:0x49E0C0 };
+// 역할 기반 본 — [side|null, suffix]; side(throw/glove/lead/rear)는 트라이얼별로 해소
+const ROLES = [
+  {f:[null,'pelvis_o'],t:[null,'neck'],c:C.SPINE,r:14}, {f:[null,'neck'],t:[null,'head'],c:C.SPINE,r:14},
+  {f:['throw','shoulder'],t:['throw','elbow'],c:C.THROW,r:14}, {f:['throw','elbow'],t:['throw','wrist'],c:C.THROW,r:14}, {f:['throw','wrist'],t:['throw','hand_tip'],c:C.THROW,r:14},
+  {f:['glove','shoulder'],t:['glove','elbow'],c:C.GLOVE,r:14}, {f:['glove','elbow'],t:['glove','wrist'],c:C.GLOVE,r:14}, {f:['glove','wrist'],t:['glove','hand_tip'],c:C.GLOVE,r:14},
+  {f:['throw','shoulder'],t:['throw','hip'],c:C.TORSO,r:9}, {f:['glove','shoulder'],t:['glove','hip'],c:C.TORSO,r:9},
+  {f:['rear','hip'],t:['rear','knee'],c:C.REAR,r:14}, {f:['rear','knee'],t:['rear','heel'],c:C.REAR,r:14}, {f:['rear','heel'],t:['rear','toe'],c:C.REAR,r:14},
+  {f:['lead','hip'],t:['lead','knee'],c:C.LEAD,r:14}, {f:['lead','knee'],t:['lead','heel'],c:C.LEAD,r:14}, {f:['lead','heel'],t:['lead','toe'],c:C.LEAD,r:14},
+  {f:[null,'l_shoulder'],t:[null,'r_shoulder'],c:C.SHO,r:18}, {f:[null,'l_hip'],t:[null,'r_hip'],c:C.HIP,r:18},
+];
+function lmKey(spec, trial){ return spec[0]===null ? spec[1] : (trial['_'+spec[0]] + '_' + spec[1]); }
+const JOINT_R = 25;
+
+// ---------- three setup ----------
+const sceneEl = document.getElementById('scene');
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x070D1A);
+let W = sceneEl.clientWidth||800, H = sceneEl.clientHeight||600;
+const camera = new THREE.PerspectiveCamera(42, W/H, 10, 40000);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(devicePixelRatio||1); renderer.setSize(W,H);
+sceneEl.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.09;
+scene.add(new THREE.AmbientLight(0xffffff,0.85));
+const dl = new THREE.DirectionalLight(0xffffff,0.65); dl.position.set(1500,2600,1800); scene.add(dl);
+const grid = new THREE.GridHelper(14000,56,0x223049,0x161e2c); scene.add(grid);
+const rubber = new THREE.Mesh(new THREE.BoxGeometry(610,24,152), new THREE.MeshBasicMaterial({color:0xE7B53C,transparent:true,opacity:0.35}));
+scene.add(rubber);
+/* [DEPTH-FOG 2026-07-05] 원근 안개 — 가까운 팔은 밝고 먼 팔은 어둡게(스틱 좌우투 깊이 판독 단서).
+   near/far는 매 프레임 카메라-타깃 거리 기준으로 loop()에서 갱신. */
+scene.fog = new THREE.Fog(0x070D1A, 2000, 20000);
+/* [MOUND 2026-07-05] 시각 지형 — KU 촬영은 평지(리드발 착지 높이 러버 ±7cm 실측·마운드 하강 없음)라 데이터는 그대로 두고,
+   마운드 판(y=지면 0)+착지 지점 너머(z≈+1.95m)부터 홈 방향 내리막+주변 지면 −254mm(공인 10in)로
+   '약간 높은 마운드에서 아래로 던지는' 모습 재현. 데이터 미변조·순수 시각 요소. */
+const MOUND_H = 254;
+const mound = (function(){
+  const s = new THREE.Shape();
+  s.moveTo(-2300,-MOUND_H); s.lineTo(-1400,0); s.lineTo(2050,0); s.lineTo(2950,-MOUND_H); s.closePath();  // 판=착지 최대(z≈1.95m)+마진 · 내리막 15°(컴팩트·프레임 안)
+  const geo = new THREE.ExtrudeGeometry(s,{depth:2400,bevelEnabled:false});
+  geo.translate(0,0,-1200);   // 압출 중심화(회전 후 좌우 대칭)
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color:0x5C452E,emissive:0x2A2015,emissiveIntensity:0.35,flatShading:true}));
+  m.rotation.y = -Math.PI/2;   // shape-X축(z프로필)→월드 Z · fitCamera에서 strideAxis로 재정렬
+  scene.add(m); return m;
+})();
+const homePlate = (function(){
+  const w=300, s=new THREE.Shape();
+  s.moveTo(-w,0); s.lineTo(w,0); s.lineTo(w,-300); s.lineTo(0,-600); s.lineTo(-w,-300); s.closePath();
+  const m = new THREE.Mesh(new THREE.ShapeGeometry(s), new THREE.MeshBasicMaterial({color:0xF2F5FA,transparent:true,opacity:0.92,side:THREE.DoubleSide}));
+  m.rotation.x = -Math.PI/2;   // 바닥에 눕힘 · 꼭짓점이 홈 방향
+  scene.add(m); return m;
+})();
+/* [HAND-LABEL 제거 2026-07-05] '왼손/오른손 릴리스' 텍스트 라벨은 거울상 결함 시기의 임시 확정 장치였음.
+   CHIRALITY-ROOT-FIX로 해부학이 올바르게 렌더된 뒤 교수 확인 후 제거(자연스러운 화면 요청). */
+
+function makeSkel(ghost){
+  const g = new THREE.Group(); scene.add(g);
+  const sph = {}; const mat = ghost?{transparent:true,opacity:0.5}:{};
+  LM.forEach(k=>{ if(k==='com')return;
+    const m = new THREE.Mesh(new THREE.SphereGeometry(JOINT_R,12,12), new THREE.MeshStandardMaterial(Object.assign({color: ghost?C.GHOST:0xF2F5FA, emissive: ghost?C.GHOST:0xF2F5FA, emissiveIntensity: ghost?0.15:0.22},mat)));
+    g.add(m); sph[k]=m; });
+  const bones = ROLES.map(role=>{
+    const r = ghost ? Math.max(5,role.r*0.7) : role.r;
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 10), new THREE.MeshStandardMaterial(Object.assign({color: ghost?C.GHOST:role.c, emissive: ghost?C.GHOST:role.c, emissiveIntensity: ghost?0.18:0.45},mat)));
+    g.add(m); return {role,m}; });
+  /* [CHIRALITY-CUES 2026-07-05] 스틱 피겨는 얼굴·장비 단서가 없으면 2D 투영상 좌/우투가 원리적으로 모호
+     (카메라 방향만으로는 해결 불가·교수 반복 지적). 명시 단서 3종: 글러브 미트(갈색·글러브 손)=가장 강한 좌우 단서,
+     공(흰색·던지는 손, 릴리스까지), 모자챙(향하는 방향 원뿔·어깨선 법선). */
+  const mitt=new THREE.Mesh(new THREE.SphereGeometry(62,14,12), new THREE.MeshStandardMaterial(Object.assign({color:0x9A6A32,emissive:0x7A5228,emissiveIntensity:0.45},mat)));
+  mitt.scale.set(1,0.55,1); g.add(mitt);
+  /* [BALL] 야구공 = 흰 구 + 빨간 실밥. 실물 크기(지름 ~7.3cm)·과장 없음(교수 요청: 자연스럽게).
+     던지는 손끝에 부착·릴리스 후 비행. */
+  const ball=new THREE.Group();
+  const ballCore=new THREE.Mesh(new THREE.SphereGeometry(37,18,14), new THREE.MeshStandardMaterial(Object.assign({color:0xFFFFFF,emissive:0xFFF2F2,emissiveIntensity:0.38},mat)));
+  ball.add(ballCore);
+  const seam=new THREE.Mesh(new THREE.TorusGeometry(36,4.5,8,22), new THREE.MeshStandardMaterial(Object.assign({color:0xD8322F,emissive:0x9A1E1B,emissiveIntensity:0.4},mat)));
+  seam.rotation.set(0.95,0.4,0); ball.add(seam);
+  ball.visible=false; g.add(ball);
+  const cap=new THREE.Mesh(new THREE.ConeGeometry(30,105,12), new THREE.MeshStandardMaterial(Object.assign({color:0xF2F5FA,emissive:0xF2F5FA,emissiveIntensity:0.3},mat)));
+  g.add(cap);
+  g.visible=false;
+  return {g,sph,bones,mitt,ball,cap};
+}
+function ensureSkels(){
+  if(!skelA) skelA = makeSkel(false);
+  if(!skelB) skelB = makeSkel(true);
+}
+
+function posBone(mesh,p,q){
+  if(!p||!q){mesh.visible=false;return;} mesh.visible=true;
+  const a=new THREE.Vector3(p[0],p[1],p[2]), b=new THREE.Vector3(q[0],q[1],q[2]);
+  const mid=a.clone().add(b).multiplyScalar(0.5); mesh.position.copy(mid);
+  const dir=b.clone().sub(a); const len=dir.length(); mesh.scale.set(1,len,1);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.normalize());
+}
+function setSkel(sk, trial, fr, fi){
+  if(!fr){sk.g.visible=false;return;} sk.g.visible=true;
+  LM.forEach(k=>{ if(k==='com')return; const p=fr[IDX[k]]; const s=sk.sph[k];
+    if(p){const vp=viewPoint(p,trial);s.visible=true;s.position.set(vp[0],vp[1],vp[2]);}else s.visible=false; });
+  sk.bones.forEach(b=>posBone(b.m, viewPoint(fr[IDX[lmKey(b.role.f,trial)]],trial), viewPoint(fr[IDX[lmKey(b.role.t,trial)]],trial)));
+  /* [CHIRALITY-CUES] 미트=글러브 손끝 · 공=던지는 손끝(릴리스+2f까지) · 모자챙=어깨선 법선 방향.
+     향하는 방향 = cross(R어깨−L어깨, up) = (−svz, 0, svx) — KU 데이터 BR에서 좌·우투 모두 +Z(홈) 향함 실측 검증. */
+  try{
+    /* ★단서류도 반드시 viewPoint/viewVec 경유(CHIRALITY-ROOT-FIX의 X반전 일관성) */
+    const gtr=fr[IDX[trial._glove+'_hand_tip']]||fr[IDX[trial._glove+'_wrist']]; const gt=gtr?viewPoint(gtr,trial):null;
+    if(gt){ sk.mitt.visible=true; sk.mitt.position.set(gt[0],gt[1],gt[2]); } else sk.mitt.visible=false;
+    const ttr=fr[IDX[trial._throw+'_hand_tip']]||fr[IDX[trial._throw+'_wrist']]; const tt=ttr?viewPoint(ttr,trial):null;
+    const ibr=(trial.events&&trial.events.i_br!=null)?trial.events.i_br:1e9;
+    /* 릴리스(i_br) 전까지=손에 · 이후=frame()의 비행 궤적이 위치 제어(여기선 숨김) */
+    if(tt && (fi==null || fi<=ibr)){ sk.ball.visible=true; sk.ball.position.set(tt[0],tt[1],tt[2]); } else sk.ball.visible=false;
+    const ls=fr[IDX['l_shoulder']], rs=fr[IDX['r_shoulder']], hdr=fr[IDX['head']];
+    if(ls&&rs&&hdr){
+      /* 향방향은 원시(왼손계) 좌표 공식으로 계산(BR에서 홈+Z 실측검증) 후 렌더계로 사상 */
+      const fv=viewVec([-(rs[2]-ls[2]),0,(rs[0]-ls[0])],trial); const fl=Math.hypot(fv[0],fv[2])||1;
+      const hd=viewPoint(hdr,trial);
+      sk.cap.visible=true;
+      sk.cap.position.set(hd[0]+fv[0]/fl*95, hd[1]+8, hd[2]+fv[2]/fl*95);
+      sk.cap.quaternion.setFromUnitVectors(_yUp, new THREE.Vector3(fv[0]/fl,0,fv[2]/fl));
+    } else sk.cap.visible=false;
+  }catch(e){}
+}
+
+// ---------- GRF arrows ----------
+function makeArrow(color,r,ghost){
+  const g=new THREE.Group(); const op=ghost?{transparent:true,opacity:0.5}:{};
+  const shaft=new THREE.Mesh(new THREE.CylinderGeometry(r,r,1,10),new THREE.MeshBasicMaterial(Object.assign({color},op)));
+  const head=new THREE.Mesh(new THREE.ConeGeometry(r*2.2,r*4.6,12),new THREE.MeshBasicMaterial(Object.assign({color},op)));
+  g.add(shaft);g.add(head);g.visible=false;scene.add(g); return {g,shaft,head,r};
+}
+// GRF 화살표는 다리 색과 구분되게 흰색 계열(요청) — 앞발=흰색, 뒷발=연황백
+const grfLeadA=makeArrow(0xFFFFFF,13,false), grfRearA=makeArrow(0xFFF0C0,16,false);
+const grfLeadB=makeArrow(C.GHOST,10,true), grfRearB=makeArrow(C.GHOST,12,true);
+const _yUp=new THREE.Vector3(0,1,0);
+// 힘은 추출 단계에서 이미 뷰어 정규축(x=측방, y=수직 up, z=stride)으로 회전됨 → 그대로 사용.
+function grfVec(trial,plate,i){
+  const gx=trial.series[plate+'_X'],gy=trial.series[plate+'_Y'],gz=trial.series[plate+'_Z'];
+  const j=Math.min(i,(gz||[]).length-1);
+  const X=gx&&gx[j]!=null?gx[j]:0, Y=gy&&gy[j]!=null?gy[j]:0, Z=gz&&gz[j]!=null?gz[j]:0;
+  return [X, Y, Z];
+}
+function setArrow(ar, base, F, scale, gy){
+  const mag=Math.hypot(F[0],F[1],F[2]);
+  if(!base||mag<60){ar.g.visible=false;return;} ar.g.visible=true;
+  const L=Math.min(mag*scale,1500);
+  ar.shaft.scale.set(1,L,1); ar.shaft.position.set(0,L/2,0); ar.head.position.set(0,L,0);
+  ar.g.position.set(base[0], base[1], base[2]);   // 발 마커에 정확히 앵커(지면 고정 아님)
+  ar.g.quaternion.setFromUnitVectors(_yUp, new THREE.Vector3(F[0],F[1],F[2]).normalize());
+}
+function footBase(t,fr,side){          // 화살표 기점 = 발 중심(힐·토 중점, 실제 높이) → 발에 정확히 붙음
+  const h=fr[IDX[t['_'+side]+'_heel']], o=fr[IDX[t['_'+side]+'_toe']];
+  if(h&&o) return viewPoint([(h[0]+o[0])/2, (h[1]+o[1])/2, (h[2]+o[2])/2], t);
+  return viewPoint(o||h||null, t);
+}
+
+// ---------- COM trajectory only ----------
+function makeTrail(color){ const geo=new THREE.BufferGeometry(); const pos=new Float32Array(1500*3); geo.setAttribute('position',new THREE.BufferAttribute(pos,3)); const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color,transparent:true,opacity:0.8})); scene.add(line); return {line,pos,geo}; }
+const trCom=makeTrail(0xffffff), trPel=makeTrail(0x7CF59B), trHand=makeTrail(0xFF6B47);
+trCom.line.visible=false; trPel.line.visible=false; trHand.line.visible=false;
+/* [BALL-FLIGHT 2026-07-05] 릴리스 후 공 비행 궤적(교수 요청). 실측 릴리스지점 + 수평 릴리스방향(데이터)
+   + 표기 구속 + 중력으로 물리 궤적 재현. 추정(공 트래킹 없음)이라 상단에 명시. gT=릴리스기준 초(BR=0). */
+const trBall=makeTrail(0xE0303A); trBall.line.material.opacity=0.95; trBall.line.material.linewidth=3; trBall.line.visible=false;
+const _BALL_G=9810;            // 중력 mm/s^2 (Y up)
+function ballRelease(t){
+  if(t._ballRel!==undefined) return t._ballRel;
+  const br=t&&t.events&&t.events.i_br; const F=t&&t.frames;
+  if(br==null||!F){ t._ballRel=null; return null; }
+  const P=(fi)=>{ const p=F[fi]&&(F[fi][IDX[t._throw+'_hand_tip']]||F[fi][IDX[t._throw+'_wrist']]); return p?viewPoint(p,t):null; };
+  const P0=P(br), Pm=P(Math.max(0,br-2));
+  if(!P0){ t._ballRel=null; return null; }
+  let hx=strideAxis.x, hz=strideAxis.z;               // 수평 방향(홈) 기본=스트라이드축
+  if(Pm){ const dx=P0[0]-Pm[0], dz=P0[2]-Pm[2]; if(Math.hypot(dx,dz)>1 && (dx*strideAxis.x+dz*strideAxis.z)>0){ hx=dx; hz=dz; } }
+  const hl=Math.hypot(hx,hz)||1; hx/=hl; hz/=hl;
+  /* 실물리: 표기 구속 + 릴리스각 −6°(포심 −2~−6°) + 중력 = 얕은 하강 직선(실제 투구 모습).
+     홈플레이트(4.3m) 살짝 지난 4.7m 지점(허리높이)에서 공 정지 = 포수 포구.
+     가짜 근거리 낙하(우스꽝) 금지·무한 퇴장 금지. */
+  const spd=(parseFloat(t.velo)||130)*1000/3.6;        // km/h→mm/s
+  const a=-6*Math.PI/180;
+  /* 포구 지점 = 홈플레이트 마커 살짝 지난 곳(릴리스는 러버보다 ~1.3m 앞이므로 플레이트와의 실거리로 계산) */
+  const runCap=Math.max(1500, Math.hypot(homePlate.position.x-P0[0], homePlate.position.z-P0[2])+150);
+  t._ballRel={P0:P0.slice(), V:[hx*Math.cos(a)*spd, Math.sin(a)*spd, hz*Math.cos(a)*spd], tCap:runCap/(Math.cos(a)*spd)};
+  return t._ballRel;
+}
+function drawBallFlight(t, sec){
+  const rel=ballRelease(t);
+  trBall.line.visible=false; trBall.geo.setDrawRange(0,0); trBall.geo.attributes.position.needsUpdate=true;
+  if(!rel || sec<=0) return null;
+  const eff=Math.min(sec, rel.tCap), steps=Math.max(2,Math.round(54*eff/rel.tCap));
+  let n=0;
+  for(let s=0;s<=steps;s++){ const ss=eff*s/steps;
+    trBall.pos[n*3]=rel.P0[0]+rel.V[0]*ss;
+    trBall.pos[n*3+1]=rel.P0[1]+rel.V[1]*ss-0.5*_BALL_G*ss*ss;
+    trBall.pos[n*3+2]=rel.P0[2]+rel.V[2]*ss; n++; }
+  trBall.geo.setDrawRange(0,n); trBall.geo.attributes.position.needsUpdate=true; trBall.line.visible=true;
+  // tCap 이후에도 공은 포구 지점(궤적 끝)에 정지 유지
+  return [rel.P0[0]+rel.V[0]*eff, rel.P0[1]+rel.V[1]*eff-0.5*_BALL_G*eff*eff, rel.P0[2]+rel.V[2]*eff];
+}
+let comTube=null;
+const comMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.72});
+const comDot=new THREE.Mesh(new THREE.SphereGeometry(32,18,18),new THREE.MeshBasicMaterial({color:0xffffff}));
+scene.add(comDot); comDot.visible=false;
+function drawTrail(tr, frames, key, upto, trial){
+  let n=0; for(let i=0;i<=upto&&i<frames.length;i++){ const p=viewPoint(frames[i][IDX[key]],trial); if(p){tr.pos[n*3]=p[0];tr.pos[n*3+1]=p[1];tr.pos[n*3+2]=p[2];n++;} }
+  tr.geo.setDrawRange(0,n); tr.geo.attributes.position.needsUpdate=true;
+}
+function drawComTrail(frames, upto, trial){
+  if(comTube){ scene.remove(comTube); comTube.geometry.dispose(); comTube=null; }
+  const pts=[];
+  for(let i=0;i<=upto&&i<frames.length;i+=2){ const p=viewPoint(frames[i][IDX.com],trial); if(p) pts.push(new THREE.Vector3(p[0],p[1],p[2])); }
+  if(pts.length>=2){
+    const curve=new THREE.CatmullRomCurve3(pts,false,'catmullrom',0.12);
+    comTube=new THREE.Mesh(new THREE.TubeGeometry(curve,Math.min(pts.length*3,220),9,8,false),comMat);
+    scene.add(comTube);
+  }
+  const cur=viewPoint(frames[upto]&&frames[upto][IDX.com],trial);
+  if(cur){comDot.position.set(cur[0],cur[1],cur[2]);comDot.visible=true;}else comDot.visible=false;
+}
+
+// ---------- joint angle labels ----------
+const labelsEl = document.getElementById('labels');
+const LABELS = [];
+const labelDivs = LABELS.map(L=>{ const d=document.createElement('div'); d.className='jlabel'; d.style.display='none'; labelsEl.appendChild(d); return d; });
+function updateLabels(fr, trial, idx){
+  labelsEl.innerHTML='';
+}
+
+// ---------- gauges ----------
+const GA = [
+  {id:'xfactor', k:'Trunk_wrt_Pelvis_Angle_Z', name:'X-factor (몸통−골반 분리)', unit:'°', color:'#E7B53C', lo:-10, hi:70},
+  {id:'pelvisV', k:'Pelvis_Ang_Vel_Z', name:'골반 각속도', unit:'°/s', color:'#7CF59B', lo:0, hi:900, abs:true},
+  {id:'trunkV', k:'Thorax_Ang_Vel_Z', name:'몸통 각속도', unit:'°/s', color:'#22d3ee', lo:0, hi:1300, abs:true},
+  {id:'shIR', k:'Pitching_Humerus_Ang_Vel_Z', name:'어깨 내회전 속도', unit:'°/s', color:'#C084FC', lo:0, hi:4500, abs:true},
+  {id:'mer', k:'Pitching_Shoulder_Angle_Z', name:'어깨 외회전(MER)', unit:'°', color:'#60A5FA', lo:0, hi:190, abs:true},
+  {id:'elbow', k:'Pitching_Elbow_Angle_X', name:'팔꿈치 굽힘', unit:'°', color:'#FF8FB0', lo:0, hi:160},
+  {id:'leadKnee', k:'Lead_Knee_Angle_X', name:'앞무릎 굽힘', unit:'°', color:'#7DDFFF', lo:0, hi:90},
+  {id:'trunkFwd', k:'Trunk_Angle_X', name:'몸통 전경(앞 기울기)', unit:'°', color:'#BEF264', lo:-20, hi:60},
+  {id:'trunkLat', k:'Trunk_Angle_Y', name:'몸통 측굴(옆 기울기)', unit:'°', color:'#F472B6', lo:-20, hi:50, abs:true},
+];
+const sideEl = document.getElementById('side');
+const gaugeEls = GA.map(g=>{
+  const d=document.createElement('div'); d.className='gauge';
+  d.innerHTML='<div class="gl"><span>'+g.name+'</span><span class="gv" style="color:'+g.color+'">—</span></div><div class="track"><div class="fill" style="background:'+g.color+'"></div><div class="pk"></div></div>';
+  sideEl.appendChild(d); return {el:d, fill:d.querySelector('.fill'), val:d.querySelector('.gv'), pk:d.querySelector('.pk')};
+});
+function gVal(trial,g,idx){
+  if(g.grf){ const x=trial.series[g.grf+'_X'],y=trial.series[g.grf+'_Y'],z=trial.series[g.grf+'_Z']; const j=Math.min(idx,(z||[]).length-1);
+    const X=x&&x[j]!=null?x[j]:0,Y=y&&y[j]!=null?y[j]:0,Z=z&&z[j]!=null?z[j]:0; return Math.hypot(X,Y,Z)/((trial.mass_kg||75)*9.81)*100; }
+  const s=trial.series[g.k]; if(!s)return null; let v=s[Math.min(idx,s.length-1)]; if(v==null)return null; if(g.abs)v=Math.abs(v); return v;
+}
+function updateGauges(trial,idx){
+  GA.forEach((g,i)=>{ const v=gVal(trial,g,idx); const el=gaugeEls[i];
+    if(v==null){el.val.textContent='—';el.fill.style.width='0%';return;}
+    const pct=Math.max(0,Math.min(100,(v-g.lo)/(g.hi-g.lo)*100));
+    el.fill.style.width=pct+'%'; el.val.textContent=Math.round(v)+' '+g.unit;
+    if(el._pk==null){ let mx=-1e9; for(let j=0;j<trial.n;j++){const y=gVal(trial,g,j); if(y!=null&&y>mx)mx=y;} el._pk=mx; }
+    const ppct=Math.max(0,Math.min(100,(el._pk-g.lo)/(g.hi-g.lo)*100)); el.pk.style.left=ppct+'%';
+  });
+}
+
+// ---------- timeseries ----------
+const tscv=document.getElementById('tscv'), tctx=tscv.getContext('2d');
+/* [2026-06-19] 단계별 시계열 재구성 — 5단계(와인드업/드라이브/블로킹/몸통/팔) 각 주요+관계 변인.
+   손(Pitching_Hand_Ang_Vel_X) 전면 제외. 차트당 선 ≤3, 단 근위→원위 운동사슬(cofire)만 4선 예외.
+   다중트라이얼 ±1SD 음영(series_lo/hi, 재베이크) · 선별 per-line 정규화(혼합단위 타이밍 비교). */
+const TS_STAGES = [
+  {id:'windup', label:'① 와인드업', charts:[
+    {id:'wu_coil', label:'골반·몸통 코일·분리', kind:'main', cofire:1, lines:[
+      {k:'Pelvis_Angle_Z', c:'#7CF59B', n:'골반 회전'},
+      {k:'Trunk_Angle_Z', c:'#22d3ee', n:'몸통 회전'},
+      {k:'Trunk_wrt_Pelvis_Angle_Z', c:'#E7B53C', n:'분리(X-factor)'}]},
+    {id:'wu_hinge', label:'힙힌지·뒷발 적재', kind:'related', peak:{k:'Back_Hip_Angle_X', from:['i_kh','i_kh_peak','i_kl_peak'], to:['i_br'], label:'힙힌지 피크', c:'#FFD166'}, lines:[
+      {k:'Back_Hip_Angle_X', c:'#FFD166', n:'뒷고관절 굴곡'},
+      {k:'FP1_Z', c:'#FFA94D', n:'뒷발 수직'}]}
+  ]},
+  {id:'drive', label:'② 드라이브', charts:[
+    {id:'dr_prop', label:'뒷발 추진 → 전진', kind:'main', cofire:1, lines:[
+      {k:'FP1_Y', c:'#F97316', n:'뒷발 전후'},
+      {k:'FP1_Z', c:'#FFD166', n:'뒷발 수직'},
+      {k:'COM_Fwd_Vel', c:'#34D399', n:'COM 전진속도'}]},
+    {id:'dr_rot', label:'회전 준비(분리 빌드업)', kind:'main', lines:[
+      {k:'Pelvis_Ang_Vel_Z', c:'#7CF59B', n:'골반 각속도'},
+      {k:'Trunk_wrt_Pelvis_Angle_Z', c:'#E7B53C', n:'분리(X-factor)'}]},
+    {id:'dr_post', label:'자세 유지', kind:'related', lines:[
+      {k:'Trunk_Angle_X', c:'#BEF264', n:'몸통 전경'},
+      {k:'Lead_Knee_Angle_X', c:'#7DDFFF', n:'앞무릎'}]}
+  ]},
+  {id:'blocking', label:'③ 블로킹', charts:[
+    {id:'bl_brake', label:'앞발 제동 → 정지', kind:'main', cofire:1, lines:[
+      {k:'FP2_Y', c:'#22d3ee', n:'앞발 전후(제동)'},
+      {k:'COM_Fwd_Vel', c:'#34D399', n:'COM 전진속도'}]},
+    {id:'bl_leg', label:'앞다리 지지·신전', kind:'main', cofire:1, lines:[
+      {k:'FP2_Z', c:'#7DDFFF', n:'앞발 수직'},
+      {k:'Lead_Knee_Angle_X', c:'#56C596', n:'앞무릎 각'},
+      {k:'Lead_Knee_Ang_Vel_X', c:'#A78BFA', n:'앞무릎 신전속도'}]}
+  ]},
+  {id:'trunk', label:'④ 몸통', charts:[
+    {id:'tr_chain', label:'근위→원위 각속도 시퀀스', kind:'main', cofire:1, lines:[
+      {k:'Pelvis_Ang_Vel_Z', c:'#7CF59B', n:'골반'},
+      {k:'Thorax_Ang_Vel_Z', c:'#22d3ee', n:'몸통'},
+      {k:'Pitching_Humerus_Ang_Vel_Z', c:'#a855f7', n:'상완'},
+      {k:'Pitching_Forearm_Ang_Vel_Z', c:'#E7B53C', n:'전완'}]},
+    {id:'tr_xf', label:'X-factor · 어깨 외회전', kind:'main', cofire:1, lines:[
+      {k:'Trunk_wrt_Pelvis_Angle_Z', c:'#E7B53C', n:'분리(X-factor)'},
+      {k:'Pitching_Shoulder_Angle_Z', c:'#60A5FA', n:'어깨 외회전'}]},
+    {id:'tr_post', label:'몸통 3축 자세', kind:'related', lines:[
+      {k:'Trunk_Angle_X', c:'#BEF264', n:'전경/뒤젖힘'},
+      {k:'Trunk_Angle_Y', c:'#F472B6', n:'측굴'}]}
+  ]},
+  {id:'arm', label:'⑤ 팔', charts:[
+    {id:'arm_speed', label:'상완·전완 각속도(채찍)', kind:'main', cofire:1, lines:[
+      {k:'Pitching_Humerus_Ang_Vel_Z', c:'#a855f7', n:'상완'},
+      {k:'Pitching_Forearm_Ang_Vel_Z', c:'#E7B53C', n:'전완'}]},
+    {id:'arm_ang', label:'어깨·팔꿈치 각도', kind:'related', lines:[
+      {k:'Pitching_Shoulder_Angle_Z', c:'#60A5FA', n:'어깨 외회전'},
+      {k:'Pitching_Elbow_Angle_X', c:'#FF8FB0', n:'팔꿈치 굴곡'}]}
+  ]},
+];
+const TS_CHARTS = TS_STAGES.reduce((a,s)=>a.concat(s.charts.map(c=>({...c, stage:s.label, stageId:s.id}))), []);
+const TS_EVENT_MARKERS = [
+  {label:'start', keys:['i_start','i_begin','start'], frame:0, c:'rgba(157,176,204,.56)'},
+  {label:'KH', keys:['i_kh','i_kh_peak','i_kl_peak'], c:'rgba(124,245,155,.58)'},
+  {label:'FC', keys:['i_fc'], c:'rgba(231,181,60,.58)'},
+  {label:'MER', keys:['i_mer'], c:'rgba(96,165,250,.58)'},
+  {label:'BR', keys:['i_br'], c:'rgba(255,90,60,.58)'}
+];
+function eventFrame(trial,marker){
+  const ev=trial&&trial.events||{};
+  for(const k of marker.keys||[]){ if(ev[k]!=null) return ev[k]; }
+  return marker.frame!=null ? marker.frame : null;
+}
+let tsChartId='tr_chain';   // 기본 = 근위→원위 운동사슬(가장 변별적)
+function activeChart(){ return TS_CHARTS.find(c=>c.id===tsChartId)||TS_CHARTS[0]; }
+function activeTS(){ return activeChart(); }   // 하위호환
+function updateTsLegend(){
+  const c=activeChart();
+  const sn=(D[playerA]&&D[playerA].sd_n)||0;
+  const sd = sn ? ' &nbsp;<span style="opacity:.55">음영 ±1SD(n='+sn+')</span>' : '';
+  const leg=byId('tsleg'); if(leg) leg.innerHTML = '<b>'+c.stage+'</b> '+c.label+' &nbsp; '+c.lines.map(t=>'<span style="color:'+t.c+'">●</span>'+t.n).join(' ')+sd;
+}
+function fillTsSel(){
+  const sel=document.getElementById('tsSel'); if(!sel)return;
+  sel.innerHTML='';
+  TS_STAGES.forEach(s=>{ const g=document.createElement('optgroup'); g.label=s.label;
+    s.charts.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent='· '+c.label;g.appendChild(o);});
+    sel.appendChild(g); });
+  sel.value=tsChartId;
+  sel.onchange=e=>{tsChartId=e.target.value;updateTsLegend();frame();};
+  updateTsLegend();
+}
+function drawTS(trialA, idxA, trialB, idxB){
+  const dpr=devicePixelRatio||1;
+  const w=tscv.width=tscv.clientWidth*dpr, h=tscv.height=tscv.clientHeight*dpr;
+  tctx.clearRect(0,0,w,h); const padL=8,padR=8,padT=24*dpr,padB=8, plotH=h-padT-padB;
+  const TS=activeChart().lines;
+  const trials=[trialA].concat(trialB?[trialB]:[]);
+  // per-line 정규화: 각 변인을 자기 최댓값으로(혼합 단위·운동사슬 타이밍 비교용). 플롯되는 모든 트라이얼 통합 → fast/slow 동일 스케일.
+  const mxL={};
+  TS.forEach(t=>{ let mx=1e-6;
+    trials.forEach(tr=>{ const a=tr.series[t.k]||[], lo=tr.series_lo&&tr.series_lo[t.k], hi=tr.series_hi&&tr.series_hi[t.k];
+      for(let i=0;i<a.length;i++){ if(a[i]!=null&&Math.abs(a[i])>mx)mx=Math.abs(a[i]);
+        if(lo&&lo[i]!=null&&Math.abs(lo[i])>mx)mx=Math.abs(lo[i]); if(hi&&hi[i]!=null&&Math.abs(hi[i])>mx)mx=Math.abs(hi[i]); } });
+    mxL[t.k]=mx; });
+  const plot=(trial,dash)=>{
+    const n=trial.n;
+    const X=i=>padL+(i/(n-1))*(w-padL-padR);
+    const Yk=(k,v)=>padT+(1-(v/mxL[k]*0.45+0.5))*plotH;
+    // 이벤트 마커
+    TS_EVENT_MARKERS.forEach(marker=>{const e=eventFrame(trial,marker);if(e==null)return;const x=X(Math.max(0,Math.min(n-1,e)));
+      tctx.strokeStyle=marker.c;tctx.lineWidth=1;tctx.setLineDash([4,4]);tctx.beginPath();tctx.moveTo(x,padT);tctx.lineTo(x,h-padB);tctx.stroke();tctx.setLineDash([]);
+      if(!dash){tctx.fillStyle=marker.c.replace(/,\s*[\d.]+\)/,',.9)');tctx.font=(10*dpr)+'px sans-serif';tctx.fillText(marker.label,x+2,padT+10*dpr);}});
+    // 다중트라이얼 ±1SD 음영(선 뒤) — series_lo/hi 있을 때만(가드: 없으면 선만, 무회귀)
+    TS.forEach(t=>{ const lo=trial.series_lo&&trial.series_lo[t.k], hi=trial.series_hi&&trial.series_hi[t.k]; if(!lo||!hi)return;
+      tctx.save(); tctx.globalAlpha=dash?0.07:0.13; tctx.fillStyle=t.c; tctx.beginPath(); let st=false;
+      for(let i=0;i<hi.length;i++){ if(hi[i]==null)continue; const x=X(i),y=Yk(t.k,hi[i]); if(!st){tctx.moveTo(x,y);st=true;}else tctx.lineTo(x,y); }
+      for(let i=lo.length-1;i>=0;i--){ if(lo[i]==null)continue; tctx.lineTo(X(i),Yk(t.k,lo[i])); }
+      tctx.closePath(); tctx.fill(); tctx.restore(); });
+    // 평균/대표 선
+    TS.forEach(t=>{ const a=trial.series[t.k]||[]; tctx.strokeStyle=t.c; tctx.lineWidth=(dash?1.3:2.1)*dpr; tctx.globalAlpha=dash?0.6:1; if(dash)tctx.setLineDash([5,4]);
+      tctx.beginPath(); let st=false;
+      for(let i=0;i<a.length;i++){ if(a[i]==null)continue; const x=X(i),y=Yk(t.k,a[i]); if(!st){tctx.moveTo(x,y);st=true;}else tctx.lineTo(x,y); }
+      tctx.stroke(); tctx.setLineDash([]); tctx.globalAlpha=1; });
+    // 힙힌지 피크 마커(차트 peak 스펙·대표 트라이얼만) — 드라이브 창 [KH,BR] 내 argmax|Back_Hip_Angle_X|
+    const pk=activeChart().peak;
+    if(pk && !dash){
+      const ser=trial.series[pk.k]||[], ev=trial.events||{};
+      const gf=keys=>{ for(const k of keys||[]){ if(ev[k]!=null) return ev[k]; } return null; };
+      let f0=gf(pk.from), f1=gf(pk.to);
+      if(f0==null)f0=0; if(f1==null)f1=n-1;
+      f0=Math.max(0,Math.min(n-1,f0)); f1=Math.max(0,Math.min(n-1,f1)); if(f1<f0){const tmp=f0;f0=f1;f1=tmp;}
+      let pf=-1, pv=-1e9;
+      for(let i=f0;i<=f1;i++){ const y=ser[i]; if(y==null)continue; if(Math.abs(y)>pv){pv=Math.abs(y);pf=i;} }
+      if(pf>=0){
+        const px=X(pf), py=Yk(pk.k, ser[pf]);
+        tctx.strokeStyle=pk.c; tctx.lineWidth=1.2*dpr; tctx.globalAlpha=0.9; tctx.setLineDash([2,3]);
+        tctx.beginPath(); tctx.moveTo(px,padT); tctx.lineTo(px,h-padB); tctx.stroke(); tctx.setLineDash([]); tctx.globalAlpha=1;
+        tctx.fillStyle=pk.c; tctx.strokeStyle='#0B1220'; tctx.lineWidth=1.4*dpr;
+        tctx.beginPath(); tctx.arc(px,py,4.5*dpr,0,Math.PI*2); tctx.fill(); tctx.stroke();
+        const khf=gf(['i_kh','i_kh_peak','i_kl_peak']), dt=trial.dt||(trial.fps?1/trial.fps:null);
+        const ms=(khf!=null&&dt)?Math.round((pf-khf)*dt*1000):null;
+        const lab=pk.label+(ms!=null?(' +'+ms+'ms'):'')+' '+Math.round(ser[pf])+'°';
+        tctx.font='bold '+(10*dpr)+'px sans-serif'; const tw=tctx.measureText(lab).width;
+        const lx=Math.min(px+6*dpr, w-padR-tw); tctx.fillStyle=pk.c;
+        tctx.fillText(lab, Math.max(padL,lx), Math.max(padT+22*dpr, py-9*dpr));
+      }
+    }
+    // playhead
+    const ph=dash?idxB:idxA; if(ph!=null){tctx.strokeStyle='#fff';tctx.lineWidth=1.5*dpr;tctx.beginPath();tctx.moveTo(X(ph),padT);tctx.lineTo(X(ph),h-padB);tctx.stroke();}
+  };
+  plot(trialA,false); if(trialB) plot(trialB,true);
+}
+
+// ---------- camera presets (stride-aware) ----------
+let strideAxis = new THREE.Vector3(0,0,1), bboxC = new THREE.Vector3(0,900,500), bboxSpan = 2500, groundY = 0, bboxSize = new THREE.Vector3(2000,1800,2000);
+function computeStride(){              // 지면 = 트라이얼별 발(힐·토) 최저 높이 (전역 최저는 타 트라이얼 좌표계·글리치에 오염됨)
+  Object.values(D).forEach(t=>{ let lo=1e9;
+    t.frames.forEach(fr=>['l_toe','r_toe','l_heel','r_heel'].forEach(k=>{const p=fr[IDX[k]];if(p&&p[1]<lo)lo=p[1];}));
+    t._gy = lo<1e9?lo:0; });
+  groundY=(D[playerA]&&D[playerA]._gy)||0; grid.position.y=groundY-MOUND_H;   // [MOUND] 주변 지면 = 마운드 −254mm
+}
+function fitCamera(){                  // 활성 트라이얼 기준 카메라·플레이트·스트라이드축
+  const ts=activeTrials().filter(Boolean); let lo=[1e9,1e9,1e9],hi=[-1e9,-1e9,-1e9];
+  ts.forEach(t=>t.frames.forEach(fr=>fr.forEach(p=>{const vp=viewPoint(p,t);if(vp)for(let j=0;j<3;j++){if(vp[j]<lo[j])lo[j]=vp[j];if(vp[j]>hi[j])hi[j]=vp[j];}})));
+  bboxC.set((lo[0]+hi[0])/2,(lo[1]+hi[1])/2,(lo[2]+hi[2])/2);
+  bboxSpan=Math.max(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2]); bboxSize.set(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2]);
+  const A=ts[0], f=A.frames, a=viewPoint(f[0][IDX.com]||f[0][IDX.pelvis_o],A), b=viewPoint(f[A.n-1][IDX.com]||f[A.n-1][IDX.pelvis_o],A);
+  if(a&&b){ strideAxis.set(b[0]-a[0],0,b[2]-a[2]); if(strideAxis.length()<1)strideAxis.set(0,0,1); strideAxis.normalize(); }
+  groundY = A._gy!=null ? A._gy : groundY; grid.position.y = groundY-MOUND_H;   // 그리드 = 주변 지면(마운드 −254mm)
+  const rfRaw=f[0][IDX[A._rear+'_heel']]||f[0][IDX[A._rear+'_toe']];
+  const rf=rfRaw?viewPoint(rfRaw,A):a;
+  if(rf){
+    /* [MOUND] 실험실 좌표에서 스트라이드가 대각선인 선수가 있어(예: 정원진 향방향 x성분 0.43)
+       마운드·러버·홈플레이트를 strideAxis에 정렬 — 마운드 긴축=실제 던지는 방향. */
+    const thY=Math.atan2(strideAxis.x, strideAxis.z);
+    rubber.position.set(rf[0], groundY+12, rf[2]); rubber.rotation.y=thY;
+    mound.position.set(rf[0], groundY, rf[2]); mound.rotation.y=-Math.PI/2+thY;
+    homePlate.position.set(rf[0]+strideAxis.x*4300, groundY-MOUND_H+4, rf[2]+strideAxis.z*4300);  // 공 비행선 아래 시각 앵커(공은 위를 지나 프레임 밖 퇴장)
+  }
+}
+function setView(v){
+  fitCamera();
+  const t=bboxC.clone();
+  const perp=new THREE.Vector3(-strideAxis.z,0,strideAxis.x);
+  /* [2026-07-05 v4] CHIRALITY-ROOT-FIX(X반전) 이후의 올바른 카메라:
+     좌투만 perp 반전 → 좌·우투 모두 '던지는 팔 쪽'에서 촬영 = 던지는 팔+공이 카메라 근측(가장 밝고 큼).
+     우투=홈 화면 오른쪽·좌투=홈 화면 왼쪽(정확한 해부학적 거울쌍). ※과거 v1~v3 카메라 시행착오는
+     전부 데이터 거울상(근본 결함) 위에서의 대증요법이었음 — 근본 수정 후엔 이 구성이 자연히 정답. */
+  const _at=activeTrials()[0]; if(_at && _at._throw==='l') perp.multiplyScalar(-1);
+  /* VIEWER-TUNE: FOV+aspect 인식 전체경로 피팅 — 재생 전 구간 클립 방지 */
+  var _sx=bboxSize.x,_sy=bboxSize.y,_sz=bboxSize.z;
+  var _strideE=Math.abs(strideAxis.x)*_sx+Math.abs(strideAxis.z)*_sz;
+  var _perpE=Math.abs(perp.x)*_sx+Math.abs(perp.z)*_sz;
+  var _hw,_hh;
+  if(v==='side'){_hw=_strideE/2+1250;_hh=_sy/2;}  // [MOUND] 내리막 경사(착지+0.9m)까지 프레임 포함 — 대칭 폭 확장(타깃 시프트는 재생 중 골반 추종에 상쇄되어 미사용)
+  else if(v==='front'){_hw=_perpE/2;_hh=_sy/2;}
+  else {_hw=_perpE/2;_hh=_strideE/2;}
+  var _tv=Math.tan(camera.fov*Math.PI/360)||0.384;
+  var _asp=camera.aspect||(W/H)||1.3;
+  var d=Math.max(Math.max(_hh/_tv,_hw/(_tv*_asp))*1.25, bboxSpan*0.85);
+  let pos;
+  if(v==='side') pos=t.clone().add(perp.clone().multiplyScalar(d)).add(new THREE.Vector3(0,d*0.12,0));
+  else if(v==='front') pos=t.clone().add(strideAxis.clone().multiplyScalar(d)).add(new THREE.Vector3(0,d*0.08,0));
+  else pos=t.clone().add(new THREE.Vector3(0,d*1.5,1));
+  camera.position.copy(pos); controls.target.copy(t); controls.update();
+}
+
+// ---------- state / animation ----------
+let mode=1, speed=0.1, playing=false, curView='side';
+const T0=-1.30, T1=0.40;             // seconds relative to BR
+let gT=T0;                           // global time (rel BR)
+function trialFrameIdx(trial,t){ const i=Math.round((trial.events.i_br||0)+t/trial.dt); return Math.max(0,Math.min(trial.n-1,i)); }
+function activeTrials(){ return [D[playerA], mode===3?D[playerB]:null]; }
+function byId(id){ return document.getElementById(id); }
+function normKey(s){ try{return String(s||'').normalize('NFC').trim();}catch(e){return String(s||'').trim();} }
+function findPlayerKey(q){
+  const n=normKey(q); if(!n)return null;
+  if(META[n])return n;
+  for(const k of ORDER){ const t=META[k]||{}; if(normKey(k)===n||normKey(t.name)===n||normKey(t.label)===n)return k; }
+  for(const k of ORDER){ const t=META[k]||{}; if(normKey(t.label).indexOf(n)>=0)return k; }
+  return null;
+}
+let scrubMarkerKey='';
+function updateScrubMarkers(trial){
+  const el=byId('scrubMarks'); if(!el||!trial)return;
+  const key=(trial.name||trial.label||'')+'|'+JSON.stringify(trial.events||{})+'|'+T0+'|'+T1;
+  if(key===scrubMarkerKey)return;
+  scrubMarkerKey=key;
+  const br=(trial.events&&trial.events.i_br)||0;
+  const html=TS_EVENT_MARKERS.map(marker=>{
+    const f=eventFrame(trial,marker); if(f==null)return '';
+    const t=(f-br)*trial.dt;
+    const pct=Math.max(0,Math.min(100,((t-T0)/(T1-T0))*100));
+    const color=marker.c.replace(/,\s*[\d.]+\)/,',.95)');
+    return '<div class="scrubMark" style="left:'+pct+'%;border-left-color:'+color+'"><span style="color:'+color+'">'+marker.label+'</span></div>';
+  }).join('');
+  el.innerHTML=html;
+}
+
+function frame(){
+  const [A,B]=activeTrials();
+  if(!A) return;
+  ensureSkels();
+  const ia=trialFrameIdx(A,gT); setSkel(skelA,A,A.frames[ia],ia);
+  /* [BALL-FLIGHT] 릴리스(gT>0) 후 공을 물리 궤적 위치로 이동 + 빨간 궤적선. 릴리스 전엔 setSkel이 손에 유지.
+     tCap 초과=프레임 밖 퇴장이라 공 숨김(궤적선만 잔존). */
+  if(gT>0){ const bp=drawBallFlight(A,gT); if(bp){ skelA.ball.visible=true; skelA.ball.position.set(bp[0],bp[1],bp[2]); } else skelA.ball.visible=false; }
+  else drawBallFlight(A,0);
+  /* [HAND-LABEL] 라벨 구동부 제거(위 제거 주석 참조) */
+  /* [RPS-BOX 2026-07-05] 릴리스 후 해당 투구의 랩소도 실측(회전수·효율·무브·회전축 추정) 표시 — 교수 요청 */
+  try{
+    const rb=byId('rpsBox');
+    if(rb){
+      if(gT>0 && A.pitch){
+        let h=_rpsHtml(A,'#E8C56A','');
+        const Bt=activeTrials()[1];
+        if(Bt && Bt.pitch && Bt.name===A.name) h+=_rpsHtml(Bt,'#49E0C0','b2');
+        rb.innerHTML=h+'<div class="note">랩소도 실측(2026-06-28 동일 세션)</div>';
+        rb.style.display='block';
+      } else rb.style.display='none';
+    }
+  }catch(e){}
+  setArrow(grfLeadA, footBase(A,A.frames[ia],'lead'), viewVec(grfVec(A,'FP2',ia),A), 1.0, A._gy);
+  setArrow(grfRearA, footBase(A,A.frames[ia],'rear'), viewVec(grfVec(A,'FP1',ia),A), 1.0, A._gy);
+  drawComTrail(A.frames,ia,A);
+  updateLabels(A.frames[ia],A,ia); updateGauges(A,ia);
+  /* [2026-06-19] 스틱 자동 중앙배열 — 활성 선수 골반(없으면 COM)을 카메라 타깃으로 부드럽게 추종(화면 중앙 유지).
+     bboxC(전체 경로 중심) 고정이면 스트라이드 중 스틱이 한쪽으로 드리프트하던 것 보정. orbit 회전은 타깃 중심 유지. */
+  try{ var _pc=A.frames[ia][IDX.pelvis_o]||A.frames[ia][IDX.com]; if(_pc){ var _pv=viewPoint(_pc,A);
+    if(_pv){ controls.target.lerp(new THREE.Vector3(_pv[0],_pv[1],_pv[2]),0.2); controls.update(); } } }catch(e){}
+  let ib=null;
+  if(B){ ib=trialFrameIdx(B,gT); setSkel(skelB,B,B.frames[ib],ib);
+    setArrow(grfLeadB, footBase(B,B.frames[ib],'lead'), viewVec(grfVec(B,'FP2',ib),B), 1.0, B._gy);
+    setArrow(grfRearB, footBase(B,B.frames[ib],'rear'), viewVec(grfVec(B,'FP1',ib),B), 1.0, B._gy);
+  } else { skelB.g.visible=false; grfLeadB.g.visible=false; grfRearB.g.visible=false; }
+  /* [2026-06-19] 모드별 그래프 분기: ②스틱+시계열=단일선수 항상 표시. ③비교=같은 선수(fast/slow·동일선수 두 시도,
+     A.name===B.name)면 표시·중첩(요구 6), 서로 다른 선수면 시계열 숨김(요구 5 — 체형 교란으로 시계열 직접비교 무의미). */
+  const samePlayer = !!(B && A.name===B.name);
+  const showTS = (mode===2) || (mode===3 && samePlayer);
+  const tsEl=byId('ts'); if(tsEl) tsEl.style.display = showTS?'block':'none';
+  if(showTS) drawTS(A, ia, (mode===3?B:null), ib);
+  updateScrubMarkers(A);
+  const treadEl=byId('tread'); if(treadEl) treadEl.innerHTML = (gT>=0?'+':'')+gT.toFixed(2)+'s &nbsp;<span class="evtick">BR=0</span>';
+  const scrubEl=byId('scrub'); if(scrubEl) scrubEl.value = Math.round((gT-T0)/(T1-T0)*1000);
+  updateCmpName();
+}
+function updateCmpName(){
+  const el=document.getElementById('cmpName'); const [A,B]=activeTrials();
+  if(!el||!A) return;
+  const hb=t=>t.hand?' <span style="color:#9DB0CC">('+(t.hand.toUpperCase()==='L'?'좌투':'우투')+')</span>':'';
+  let s='<span style="color:#e8ecf2">●</span> '+A.label+hb(A)+' <b>'+A.velo+'</b>km/h';
+  if(B) s+='<br><span style="color:'+'#49E0C0">●</span> '+B.label+hb(B)+' <b>'+B.velo+'</b>km/h';
+  el.innerHTML=s;
+}
+const legendEl=byId('legend'); if(legendEl) legendEl.style.display='none';   // 분절 색 범례 숨김(요청)
+/* [RPS-BOX] 랩소도 카드 헬퍼 — pitch={typeKo,velo,spin,eff,hb,vb}. 회전축(시계)=무브 방향 기반 추정(효율 낮으면 자이로 성분↑ 주의). */
+function _axisClock(hb,vb){
+  if(hb==null||vb==null) return '—';
+  let deg=Math.atan2(hb,vb)*180/Math.PI; if(deg<0)deg+=360;
+  let h=Math.floor(deg/30); let m=Math.round((deg%30)/30*60/15)*15; if(m===60){m=0;h+=1;}
+  if(h===0)h=12; if(h>12)h-=12;
+  return h+':'+(m<10?'0':'')+m;
+}
+function _rpsHtml(t,color,cls){
+  const p=t.pitch||{};
+  const axis=(p.spinDir && /^\d/.test(p.spinDir))?(p.spinDir+(p.gyro!=null?' · 자이로 '+Math.round(p.gyro)+'°':'')):_axisClock(p.hb,p.vb);
+  const rows=[['구속',(p.velo!=null?p.velo+' km/h':'—')],['회전수',(p.spin!=null?Math.round(p.spin)+' rpm':'—')],
+              ['회전효율',(p.eff!=null?Math.round(p.eff)+' %':'—')],['무브(수평/수직)',(p.hb!=null?Math.round(p.hb)+' / '+Math.round(p.vb)+' cm':'—')],
+              ['회전축',axis]];
+  return '<div class="'+(cls||'')+'"><div class="t" style="color:'+color+'">'+(p.typeKo||p.type||'')+'</div>'+
+    rows.map(r=>'<div class="r"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('')+'</div>';
+}
+
+let last=performance.now();
+function loop(now){ const dtr=(now-last)/1000; last=now;
+  if(playing){ gT += dtr*speed; if(gT>T1){gT=T0;} frame(); }
+  /* [DEPTH-FOG] 카메라 거리 기반 근/원 갱신 — 가까운 팔 밝게·먼 팔 어둡게(좌우 깊이 판독) */
+  const _cd=camera.position.distanceTo(controls.target);
+  scene.fog.near=Math.max(300,_cd-bboxSpan*0.2); scene.fog.far=_cd+bboxSpan*1.05;
+  controls.update(); renderer.render(scene,camera); requestAnimationFrame(loop);
+}
+
+// ---------- controls ----------
+// 선수 드롭다운 채우기 (라벨 = 그룹·이름)
+// [PITCH-VARIANTS 2026-07-05] selA=대표(포심 최속) 10명 · selB=대표+구종 변형(이름·슬라이더 등, 동일 name=시계열 중첩 비교 가능)
+(function fillSel(){
+  const optHtml=ORDER.map(k=>{const t=META[k]||{}; const g=t.group?t.group+' · ':''; return '<option value="'+k+'">'+g+(t.label||t.name||k)+'</option>';}).join('');
+  const allKeys=ORDER.concat(Object.keys(META).filter(k=>ORDER.indexOf(k)<0).sort());
+  const optAll=allKeys.map(k=>{const t=META[k]||{}; const g=(ORDER.indexOf(k)>=0&&t.group)?t.group+' · ':''; return '<option value="'+k+'">'+g+(t.label||t.name||k)+'</option>';}).join('');
+  const sa=document.getElementById('selA'), sb=document.getElementById('selB');
+  if(sa){ sa.innerHTML=optHtml; sa.value=playerA; }
+  if(sb){ sb.innerHTML=optAll; sb.value=playerB; }
+})();
+// 모드3 진입 시 selB 기본값 = 현재 선수의 첫 구종 변형(있으면) — '포심 최속 vs 변화구' 비교 즉시
+function defaultCmpFor(pk){
+  const t=META[pk]||{}; const vs=t.variants||[];
+  for(const v of vs){ if(META[v]) return v; }
+  return null;
+}
+async function refreshView(){
+  await ensureActivePlayers();
+  scrubMarkerKey='';
+  gaugeEls.forEach(g=>g._pk=null);
+  computeStride();
+  setView(curView);
+  frame();
+  try{renderPitchBtns();}catch(e){}   /* [PT-BTNS] 선수/모드 변경 시 구종 버튼 갱신 */
+}
+const modesEl=byId('modes'); if(modesEl) modesEl.onclick=async e=>{const b=e.target.closest('.mode');if(!b)return;mode=+b.dataset.m;document.querySelectorAll('#modes .mode').forEach(x=>x.classList.toggle('on',x===b));const sb=byId('selB');
+  if(mode===3){ const dv=defaultCmpFor(playerA); if(dv && (playerB===playerA || !META[playerB] || (META[playerB].name||playerB)!==(META[playerA].name||playerA))){ playerB=dv; if(sb)sb.value=dv; } }
+  if(sb)sb.style.display=mode===3?'inline-block':'none';try{await refreshView();}catch(err){showFatal(err);}};
+const selAEl=byId('selA'); if(selAEl) selAEl.onchange=async e=>{playerA=e.target.value;try{await refreshView();}catch(err){showFatal(err);}};
+const selBEl=byId('selB'); if(selBEl) selBEl.onchange=async e=>{playerB=e.target.value;try{await refreshView();}catch(err){showFatal(err);}};
+/* [PT-BTNS 2026-07-05] 뷰어 내장 구종 비교 버튼(교수: 대시보드 탭 버튼 대신 뷰어 자체에) —
+   대표(포심 최속) 단독 / vs 슬라이더·커브·체인지업·스플리터(모드3 동일선수 비교=시계열 중첩). */
+function renderPitchBtns(){
+  var el=byId('ptBtns'); if(!el) return;
+  var t=META[playerA]||{}; var vs=t.variants||[];
+  if(!vs.length){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='inline-flex'; el.innerHTML='';
+  var lab=document.createElement('span'); lab.style.cssText='font-size:11px;color:#5d6b82;margin:0 2px 0 4px'; lab.textContent='구종'; el.appendChild(lab);
+  function mk(label,on,fn){ var b=document.createElement('button'); b.className='btn'+(on?' on':''); b.textContent=label; b.onclick=fn; return b; }
+  el.appendChild(mk((t.pitchType||'포심'), mode!==3, async function(){ mode=1;
+    document.querySelectorAll('#modes .mode').forEach(function(x){x.classList.toggle('on', +x.dataset.m===1);});
+    var sb=byId('selB'); if(sb)sb.style.display='none';
+    try{await refreshView();}catch(e){showFatal(e);} }));
+  vs.forEach(function(vk){ if(!META[vk]) return; var ko=(vk.split('\u00b7')[1]||vk);
+    el.appendChild(mk('vs '+ko, (mode===3&&playerB===vk), async function(){ mode=3; playerB=vk;
+      document.querySelectorAll('#modes .mode').forEach(function(x){x.classList.toggle('on', +x.dataset.m===3);});
+      var sb=byId('selB'); if(sb){sb.style.display='inline-block'; sb.value=vk;}
+      try{await refreshView();}catch(e){showFatal(e);} }));
+  });
+}
+const viewsEl=byId('views'); if(viewsEl) viewsEl.onclick=e=>{const b=e.target.closest('.btn');if(!b)return;curView=b.dataset.v;document.querySelectorAll('#views .btn').forEach(x=>x.classList.toggle('on',x===b));setView(curView);};
+const speedsEl=byId('speeds'); if(speedsEl) speedsEl.onclick=e=>{const b=e.target.closest('.btn');if(!b)return;speed=+b.dataset.s;document.querySelectorAll('#speeds .btn').forEach(x=>x.classList.toggle('on',x===b));};
+const ppEl=byId('pp'); if(ppEl) ppEl.onclick=()=>{playing=!playing;const pp=byId('pp');if(pp)pp.textContent=playing?'❚❚':'▶';last=performance.now();};
+const scrubCtl=byId('scrub'); if(scrubCtl) scrubCtl.oninput=e=>{gT=T0+(+e.target.value/1000)*(T1-T0);playing=false;const pp=byId('pp');if(pp)pp.textContent='▶';frame();};
+
+function resize(){ W=sceneEl.clientWidth;H=sceneEl.clientHeight; camera.aspect=W/H;camera.updateProjectionMatrix(); renderer.setSize(W,H); frame(); }
+window.addEventListener('resize',resize);
+/* VIEWER-FIT: 컨테이너(iframe/embed) 리사이즈에도 재프레임 */
+if(window.ResizeObserver){try{var _ro=new ResizeObserver(function(){resize();});_ro.observe(sceneEl);}catch(e){}}
+setTimeout(resize,120);setTimeout(resize,500);
+
+// ---------- URL deep-link params (대시보드 ▶동작 버튼 연동) ----------
+// 예: motion_viewer.html?mode=2&focus=leadGrf&event=fc
+//   mode=1..4 · pair=0|1 · view=side|front|top · speed=0.1|1
+//   event=start|kh|kl|fc|mer|br (해당 이벤트 시점으로 스크럽) · t=초(BR기준, 예 -0.12)
+//   focus=xfactor|leadGrf|rearGrf|pelvisV|trunkV (게이지 강조) · autoplay=1
+async function applyParams(){
+  const QP = new URLSearchParams(location.search);
+  if(QP.get('bare')){ try{ document.body.classList.add('bare'); playing=true; setTimeout(function(){try{resize();}catch(e){}},200); setTimeout(function(){try{resize();}catch(e){}},700); }catch(e){} } /* VIEWER-BARE */
+  const pA = findPlayerKey(QP.get('player')||QP.get('playerA')||QP.get('a'));
+  if(pA){ playerA=pA; const sa=byId('selA'); if(sa)sa.value=playerA; }
+  const pB = findPlayerKey(QP.get('compare')||QP.get('playerB')||QP.get('b'));
+  if(pB){ playerB=pB; const sb=byId('selB'); if(sb)sb.value=playerB; }
+  const m = parseInt(QP.get('mode')||'',10);
+  if(m>=1&&m<=4){ mode=m===4?3:m;
+    document.querySelectorAll('#modes .mode').forEach(x=>x.classList.toggle('on',+x.dataset.m===mode));
+    const pairs=byId('pairs'); if(pairs) pairs.style.display = m===4?'flex':'none';
+    const sb=byId('selB'); if(sb) sb.style.display=mode===3?'inline-block':'none'; }
+  const p = parseInt(QP.get('pair')||'',10);
+  if(p===0||p===1){ window.cmpPair=p;
+    document.querySelectorAll('#pairs .pair').forEach(x=>x.classList.toggle('on',+x.dataset.p===p)); }
+  const v = QP.get('view');
+  if(v==='side'||v==='front'||v==='top'){ curView=v;
+    document.querySelectorAll('#views .btn').forEach(x=>x.classList.toggle('on',x.dataset.v===v)); }
+  const s = parseFloat(QP.get('speed')||'');
+  if(s===0.1||s===1){ speed=s;
+    document.querySelectorAll('#speeds .btn').forEach(x=>x.classList.toggle('on',+x.dataset.s===s)); }
+  await ensureActivePlayers();
+  const EVK = {start:['i_start','i_begin'], kh:['i_kh','i_kh_peak','i_kl_peak'], kl:['i_kh','i_kh_peak','i_kl_peak'], fc:['i_fc'], mer:['i_mer'], br:['i_br']};
+  const ev = (QP.get('event')||'').toLowerCase(); const A = activeTrials()[0];
+  if(ev && EVK[ev] && A){
+    let e = null; const events = A.events || {};
+    EVK[ev].some(k=>{ if(events[k]!=null){ e=events[k]; return true; } return false; });
+    if(e==null && ev==='start') e = 0;
+    if(e!=null){
+    gT = (e-(A.events.i_br||0))*A.dt;
+    gT = Math.max(T0,Math.min(T1,gT)); }
+  }
+  const t = parseFloat(QP.get('t')||'');
+  if(!isNaN(t)) gT = Math.max(T0,Math.min(T1,t));
+  const f = QP.get('focus');
+  if(f) GA.forEach((g,i)=>{ if(g.id===f && gaugeEls[i] && gaugeEls[i].el){ const el=gaugeEls[i].el;
+    el.style.borderColor='var(--gold)';
+    el.style.boxShadow='0 0 0 1px var(--gold), 0 0 16px #E7B53C55';
+    el.scrollIntoView({block:'nearest'}); } });
+  if(QP.get('autoplay')==='1'){ playing=true; const pp=byId('pp'); if(pp) pp.textContent='❚❚'; }
+}
+
+// init
+async function init(){
+  fillTsSel();
+  await applyParams();
+  ensureSkels();
+  computeStride();
+  setView(curView);
+  gaugeEls.forEach(g=>g._pk=null);
+  frame();
+  try{renderPitchBtns();}catch(e){}   /* [PT-BTNS] 부트 시에도 구종 버튼 렌더(init은 refreshView 미경유) */
+  requestAnimationFrame(loop);
+}
+init().catch(showFatal);
+</script>
+</body></html>

@@ -1,0 +1,8 @@
+const fs=require('fs'),path=require('path'),vm=require('vm');const ROOT=process.cwd(),SRC=path.join(ROOT,'src');
+const MODS=['tuning_models.js','pitch_norms.js','mech6.js','parse_c3dtxt.js','extract_theia.js'];
+const sb={console:{log(){},warn(){},error(){}},Math,JSON,Date,isNaN,isFinite,parseInt,parseFloat,Array,Object,String,Number,Boolean,RegExp,Error,Map,Set,Float64Array,Int32Array,Uint8Array};
+sb.self=sb;sb.window=sb;sb.globalThis=sb;vm.createContext(sb);MODS.forEach(r=>vm.runInContext(fs.readFileSync(path.join(SRC,'modules',r),'utf8'),sb,{filename:r}));
+function quant(a,q){a=a.filter(x=>x!=null&&isFinite(x)).slice().sort((x,y)=>x-y);if(!a.length)return null;var i=(a.length-1)*q,lo=Math.floor(i),hi=Math.ceil(i);return lo===hi?a[lo]:a[lo]+(a[hi]-a[lo])*(i-lo);}
+const dir=path.join(ROOT,'Normative_data');const vals=[];
+fs.readdirSync(dir).forEach(name=>{const pd=path.join(dir,name);if(!fs.existsSync(path.join(pd,'meta.json')))return;const meta=JSON.parse(fs.readFileSync(path.join(pd,'meta.json'),'utf8'));const td=path.join(pd,'theia');if(!fs.existsSync(td))return;const files=fs.readdirSync(td).filter(f=>/\.txt$/i.test(f)).sort();const per=[];files.forEach(f=>{try{const t=sb.extractTheia.extractTrial(sb.parseC3DTxt(fs.readFileSync(path.join(td,f),'utf8')),{weight_kg:meta.weight_kg,handedness:meta.handedness,delivery:meta.delivery_code});const S=t.series,e=t.events,tx=S.Trunk_Angle_X;if(tx&&isFinite(tx[e.i_kl_peak])&&isFinite(tx[e.i_fc]))per.push(tx[e.i_kl_peak]-tx[e.i_fc]);}catch(ex){}});if(per.length){var m=per.reduce((a,b)=>a+b,0)/per.length;vals.push(m);}});
+console.log('trunkLeanChange(엘리트 n='+vals.length+'): p25='+quant(vals,.25).toFixed(2)+' med='+quant(vals,.5).toFixed(2)+' p75='+quant(vals,.75).toFixed(2));

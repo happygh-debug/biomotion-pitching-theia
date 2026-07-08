@@ -1,0 +1,13 @@
+const fs=require('fs'),path=require('path'),vm=require('vm');const ROOT=process.cwd(),SRC=path.join(ROOT,'src');
+const MODS=['tuning_models.js','pitch_norms.js','mech6.js','parse_c3dtxt.js','extract_theia.js','biomotion.js','command.js','injury_scoring.js','energy.js','player_report.js','phases.js','zip_reader.js','etdiag.js'];
+const sb={console:{log(){},warn(){},error(){}},Math,JSON,Date,isNaN,isFinite,parseInt,parseFloat,Array,Object,String,Number,Boolean,RegExp,Error,Map,Set,Float64Array,Int32Array,Uint8Array,Promise,setTimeout};
+sb.self=sb;sb.window=sb;sb.globalThis=sb;vm.createContext(sb);MODS.forEach(r=>vm.runInContext(fs.readFileSync(path.join(SRC,'modules',r),'utf8'),sb,{filename:r}));
+const meta=JSON.parse(fs.readFileSync(path.join(ROOT,'data/서초율/meta.json'),'utf8'));
+const sd=path.join(ROOT,'data/서초율/theia'),files=fs.readdirSync(sd).filter(f=>/\.txt$/i.test(f)).sort(),tr=[];
+files.forEach(f=>{try{tr.push({file:f,trial:sb.extractTheia.extractTrial(sb.parseC3DTxt(fs.readFileSync(path.join(sd,f),'utf8')),{weight_kg:meta.weight_kg,handedness:meta.handedness,delivery:meta.delivery_code})});}catch(e){}});
+const m={name:meta.name,height_m:meta.height_m,weight_kg:meta.weight_kg,handedness:meta.handedness,delivery:meta.delivery_code};
+const d=sb.reportData.assemble(tr,null,m,null),bi=(d.best_trial_index||1)-1;d.phases=sb.phases.compute(d.trials[bi],m,d.energy_transfer,d.trials,d.command);
+const det=sb.mech6.detail6(d),NB=sb.PITCH_NORMS;
+(det.windup||[]).forEach(x=>{var w=(NB[x.key])?sb.mech6.bandWord(x.value,NB[x.key],x.dir):'규준없음';console.log('  '+x.key+'='+x.value+' ('+x.dir+') → '+w);});
+console.log('와인드업 밴드개수:',JSON.stringify(sb.mech6.bandCounts(det.windup,NB)));
+console.log('postureMaint=',(function(){var s=d.phases.stages;for(var i=0;i<s.length;i++)for(var j=0;j<s[i].metrics.length;j++)if(s[i].metrics[j].key==='postureMaint')return s[i].metrics[j].value;})());

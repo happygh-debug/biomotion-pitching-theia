@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Theia 진단 (키 전용·초경량)</title>
+<style>
+  body{font:14px/1.65 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;background:#0f1420;color:#e8ecf2;padding:22px;max-width:920px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 4px} .sub{color:#8aa;font-size:13px;margin-bottom:14px}
+  .card{background:#161d2b;border:1px solid #26324a;border-radius:9px;padding:14px 16px;margin:12px 0}
+  b{color:#7fb0ee} .big{color:#ff8fb0;font-weight:700;font-size:17px}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  #mem{position:fixed;right:12px;top:12px;background:#161d2b;border:1px solid #2a3648;border-radius:7px;padding:5px 12px;font-family:ui-monospace,monospace;font-size:13px;color:#93a6bd}
+  .warn{color:#ff8fb0} .ok{color:#7fd18b} .run{color:#ffcf5c}
+  button{background:#2f6feb;color:#fff;border:0;border-radius:7px;padding:8px 14px;font-size:13px;cursor:pointer;margin:6px 6px 0 0}
+  button:disabled{opacity:.5}
+  ul{margin:6px 0;padding-left:18px;max-height:200px;overflow:auto} li{font-size:12px;color:#b8c2d0}
+</style>
+</head>
+<body>
+<div id="mem">힙 …</div>
+<h1>Theia 진단 — 키 전용(값 안 읽음)</h1>
+<div class="sub">저장 <b>값(대용량 데이터)은 절대 읽지 않고</b> 개수·이름만 셉니다 → 크래시 불가. 진단: <span class="mono">diag 2026-07-04 13:30 · keys-only</span></div>
+
+<div id="s1" class="card"><b>1. 대시보드 빌드</b> — <span id="o1" class="run">확인 중…</span></div>
+<div id="s2" class="card"><b>2. 저장 개수(값 안 읽음)</b> — <span id="o2" class="run">세는 중…</span></div>
+<div id="verdict" class="card" style="display:none"></div>
+<div class="card" style="border-color:#3a3a5a">
+  <div class="sub" style="margin:0 0 6px">아래는 <b>선택</b>입니다(값을 딱 1명만 읽어 크기를 잽니다 — 한 명 데이터가 매우 크면 이 버튼만으로 무거울 수 있어요):</div>
+  <button id="sbtn" onclick="sampleOne()" disabled>선택: 1명만 크기 측정</button>
+  <div id="o3" style="margin-top:8px"></div>
+</div>
+<div class="sub" style="margin-top:12px">완료되면 이 화면을 캡처해 주세요. <b>2번의 개수</b>가 핵심입니다.</div>
+
+<script>
+(function(){
+  var DB='biomotion_pitching', STORE='players';
+  var mem=document.getElementById('mem');
+  function nowHeap(){ try{ var m=window.performance&&performance.memory; return m?m.usedJSHeapSize:0; }catch(e){ return 0; } }
+  setInterval(function(){ mem.textContent='힙 '+mb(nowHeap()); },600);
+  function mb(b){ return (b/1048576).toFixed(1)+'MB'; }
+  var o1=document.getElementById('o1'), o2=document.getElementById('o2'), o3=document.getElementById('o3');
+  var state={cacheStale:null,total:null};
+  var firstKey=null;
+
+  function stampOf(t){ var m=t.match(/__BM_BUILD='([^']*)'/); return m?m[1]:'(표식없음)'; }
+  function step1(){
+    Promise.all([
+      fetch('index.html?fresh='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(stampOf).catch(function(){return '서버읽기실패';}),
+      fetch('index.html',{cache:'force-cache'}).then(function(r){return r.text();}).then(stampOf).catch(function(){return '캐시읽기실패';})
+    ]).then(function(a){ var fresh=a[0],cached=a[1],same=(fresh===cached); state.cacheStale=!same;
+      o1.innerHTML=(same?'<span class="ok">최신본</span>':'<span class="warn">옛 빌드 캐시!</span>')+' <span class="mono">서버:'+fresh+' / 브라우저:'+cached+'</span>';
+    });
+  }
+
+  function step2(){
+    var done=false; function fin(msg,total,keys){ if(done)return; done=true;
+      state.total=(total==null?null:total);
+      o2.innerHTML=msg;
+      if(keys&&keys.length){ firstKey=keys[0]; document.getElementById('sbtn').disabled=false;
+        // 이름 파싱(값 안 읽음): id 형식 team::팀::이름::시스템 또는 cohort::이름::시스템
+        var names=keys.map(function(k){ k=String(k); var p=k.split('::'); return p.length>=3?(p[0]==='cohort'?p[1]:(p[2]||k)):k; });
+        var seen={},dups=0; names.forEach(function(n){ if(seen[n])dups++; seen[n]=1; });
+        var li=names.slice(0,40).map(function(n){return '<li>'+n+'</li>';}).join('');
+        o2.innerHTML+='<div class="sub" style="margin-top:6px">중복 이름 '+dups+'건 · 목록(최대 40):</div><ul>'+li+(names.length>40?'<li>…외 '+(names.length-40)+'명</li>':'')+'</ul>';
+      }
+      verdict();
+    }
+    var rq; try{ rq=indexedDB.open(DB); }catch(e){ fin('<span class="warn">DB open 예외</span>'); return; }
+    rq.onerror=function(){ fin('<span class="warn">DB 열기 실패</span>'); };
+    rq.onblocked=function(){ fin('<span class="warn">DB 잠김 — 크래시난 대시보드 탭을 모두 닫고 새로고침</span>'); };
+    rq.onsuccess=function(){ var db=rq.result;
+      if(!db.objectStoreNames.contains(STORE)){ fin('<span class="ok">저장 선수 0명</span> (players 저장소 없음)',0); return; }
+      try{ var st=db.transaction(STORE,'readonly').objectStore(STORE);
+        var kq=st.getAllKeys();  // ★키만 — 값(대용량) 안 읽음 → OOM 불가
+        kq.onsuccess=function(){ var keys=kq.result||[]; fin('<span class="big">저장 선수 '+keys.length+'명</span>', keys.length, keys); };
+        kq.onerror=function(){ fin('<span class="warn">키 읽기 실패</span>'); };
+      }catch(e){ fin('<span class="warn">트랜잭션 오류: '+e.message+'</span>'); }
+    };
+    setTimeout(function(){ fin('<span class="warn">10초 초과 — 대시보드 탭을 닫고 새로고침</span>'); },10000);
+  }
+
+  window.sampleOne=function(){ if(!firstKey)return; var b=document.getElementById('sbtn'); b.disabled=true; o3.innerHTML='<span class="run">1명 값 읽는 중… (한 명이 매우 크면 무거울 수 있음)</span>';
+    var rq=indexedDB.open(DB);
+    rq.onsuccess=function(){ var db=rq.result; var g=db.transaction(STORE,'readonly').objectStore(STORE).get(firstKey);
+      g.onsuccess=function(){ var r=g.result; if(!r){ o3.innerHTML='레코드 없음'; return; }
+        var D=r.DATA||{}, ts=D.trials||[]; var f=0,s=0,gr=0,x=0;
+        for(var i=0;i<ts.length;i++){ var t=ts[i]||{}; function L(o){try{return JSON.stringify(o).length}catch(e){return 0}} f+=L(t.frames);s+=L(t.series);gr+=L(t.grf);x+=L(t.x_factor); }
+        var tot=f+s+gr+x;
+        o3.innerHTML='<div class="card"><b>1명("'+(r.name||firstKey)+'") 크기</b>: <b class="big">'+mb(tot)+'</b> · '+ts.length+'구<br><span class="mono">frames '+mb(f)+' / series '+mb(s)+' / grf '+mb(gr)+' / x_factor '+mb(x)+'</span><br><span class="sub">이 값 × 저장 인원 ≈ 전체. 한 명이 수십 MB면, 그 여러 명을 한 번에 읽는 옛 방식이 OOM 원인.</span></div>';
+      };
+      g.onerror=function(){ o3.innerHTML='<span class="warn">읽기 오류</span>'; };
+    };
+    rq.onerror=function(){ o3.innerHTML='<span class="warn">DB 열기 실패</span>'; };
+  };
+
+  function verdict(){ var v=document.getElementById('verdict'); v.style.display='block'; var m='';
+    if(state.cacheStale===true){ m='<b class="warn">브라우저가 옛 빌드를 캐시 중.</b> 새 탭에서 <span class="mono">/pitching/theia/?v=99</span> 로 열면 최신 수정본 적용.'; }
+    else if(state.total===0){ m='<b>저장 선수 0명.</b> 크래시는 저장 데이터와 무관 → 클라우드/확장 쪽.'; }
+    else if(state.total!=null){ m='<b>저장 선수 '+state.total+'명 확인.</b> 이 개수와, 위 "1명 크기 측정"(선택) 값을 알려 주세요 — 그 두 숫자로 정확한 해결책을 확정합니다.'; }
+    else { m='측정에 문제가 있었습니다 — 위 메시지를 캡처해 주세요.'; }
+    v.innerHTML=m;
+  }
+
+  window.addEventListener('load', function(){ setTimeout(function(){ step1(); step2(); }, 200); });
+})();
+</script>
+</body>
+</html>

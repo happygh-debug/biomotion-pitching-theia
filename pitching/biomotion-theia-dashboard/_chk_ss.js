@@ -1,0 +1,16 @@
+const fs=require('fs'),path=require('path'),vm=require('vm');
+const ROOT=process.cwd(),SRC=path.join(ROOT,'src');
+const MODS=['tuning_models.js','pitch_norms.js','mech6.js','parse_c3dtxt.js','extract_theia.js','biomotion.js','command.js','injury_scoring.js','energy.js','player_report.js','phases.js','zip_reader.js','etdiag.js'];
+const stub={style:{},appendChild(){},setAttribute(){},addEventListener(){}};
+const sb={console:{log(){},warn(){},error(){}},Math,JSON,Date,isNaN,isFinite,parseInt,parseFloat,Array,Object,String,Number,Boolean,RegExp,Error,Map,Set,Float64Array,Int32Array,Uint8Array,Promise,setTimeout};
+sb.self=sb;sb.window=sb;sb.globalThis=sb;sb.document={getElementById:()=>null,createElement:()=>Object.create(stub),addEventListener(){}};
+vm.createContext(sb);MODS.forEach(r=>vm.runInContext(fs.readFileSync(path.join(SRC,'modules',r),'utf8'),sb,{filename:r}));
+['서초율','김범준'].forEach(nm=>{ const dir=path.join(ROOT,'data',nm),meta=JSON.parse(fs.readFileSync(path.join(dir,'meta.json'),'utf8'));
+  const sd=path.join(dir,'theia'),files=fs.readdirSync(sd).filter(f=>/\.txt$/i.test(f)).sort(),tr=[];
+  files.forEach(f=>{try{tr.push({file:f,trial:sb.extractTheia.extractTrial(sb.parseC3DTxt(fs.readFileSync(path.join(sd,f),'utf8')),{weight_kg:meta.weight_kg,handedness:meta.handedness,delivery:meta.delivery_code})});}catch(e){}});
+  const m={name:meta.name,height_m:meta.height_m,weight_kg:meta.weight_kg,handedness:meta.handedness,delivery:meta.delivery_code};
+  const d=sb.reportData.assemble(tr,null,m,null),bi=(d.best_trial_index||1)-1;
+  d.phases=sb.phases.compute(d.trials[bi],m,d.energy_transfer,d.trials,d.command);
+  const S=d.phases.stageStats; console.log('\n=== '+nm+' (트라이얼 '+d.trials.length+') ===');
+  Object.keys(S).forEach(k=>{ console.log(' ['+k+']'); (S[k]||[]).forEach(x=>{ if(!x){console.log('    (null)');return;} console.log('    '+x.label+': '+(x.mean!=null?x.mean.toFixed(1):'–')+x.unit+(x.sd!=null?' ±'+x.sd.toFixed(1):'')+(x.cv!=null?' (CV '+x.cv.toFixed(1)+'%)':'')+' n='+x.n); }); });
+});

@@ -1,0 +1,66 @@
+{
+  "version": "bl1",
+  "player_id": "sample_player_001",
+  "player_name": "샘플선수",
+  "handedness": "R",
+  "session_date": "2026-03-10",
+  "source_session_id": "session_20260310_theia",
+  "established_at": "2026-03-10T14:30:00+09:00",
+  "n_sessions_averaged": 1,
+  "measured_kmh": 142.5,
+  "composite_cv": 4.2,
+  "stages": {
+    "windup": {
+      "metrics": {
+        "wuPelCoil": 12.3,
+        "wuTrunkCoil": 8.1,
+        "wuPelVel": 95.2
+      }
+    },
+    "stride": {
+      "metrics": {
+        "strideLen": 1.42,
+        "driveWork": 118.5,
+        "leadFootAngleFC": -5.2
+      }
+    },
+    "block": {
+      "metrics": {
+        "apBrakeImpulse": 12.8,
+        "comVel": 2.72
+      }
+    },
+    "knee": {
+      "metrics": {
+        "kneeExtROM": 18.5,
+        "leadKneeFlexFC": 52.1
+      }
+    },
+    "trunk": {
+      "metrics": {
+        "xfPeak": 42.0,
+        "xfAtFC": 38.5,
+        "openAng": 8.2
+      }
+    },
+    "arm": {
+      "metrics": {
+        "armRotV": 4050,
+        "merPk": 82.5,
+        "armSlot": 81.0
+      }
+    }
+  },
+  "mech6_summary": {
+    "windup": "우수",
+    "stride": "정상",
+    "block": "정상",
+    "knee": "미흡",
+    "trunk": "정상",
+    "arm": "우수"
+  },
+  "provenance": {
+    "method": "manual_snapshot",
+    "note": "샘플 전용 — 조건축·평가에 자동 반영하지 않음 (docs/baseline_vs_current_data_contract.md)"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "note": "ZIP/meta.json 번들 예시 — 자동 평가·axisSlices 미연동",
+  "player": {
+    "name": "샘플선수",
+    "handedness": "R",
+    "height_m": 1.82,
+    "weight_kg": 88
+  },
+  "session_meta": {
+    "fatigue": {
+      "$ref": "session_meta_fatigue_fm1.json",
+      "comment": "실제 번들에서는 fatigue 블록을 inline 삽입"
+    }
+  },
+  "baseline": {
+    "$ref": "baseline_bl1_sample.json",
+    "comment": "실제 번들에서는 baseline 블록을 inline 삽입 · baselineEstablished 플래그와 병행 가능"
+  },
+  "baselineEstablished": false,
+  "ingestion_status": {
+    "baseline_vs_current": "disabled_until_picker_approval",
+    "fatigue_vs_fresh": "disabled_until_picker_approval",
+    "early_vs_late_proxy": "세션 순서만 · 피로 단정 금지"
+  }
+}

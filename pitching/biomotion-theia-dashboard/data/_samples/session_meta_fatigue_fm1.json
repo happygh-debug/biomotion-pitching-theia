@@ -1,0 +1,31 @@
+{
+  "version": "fm1",
+  "session_date": "2026-05-15",
+  "note": "샘플 전용 — 평가·조건축에 자동 반영하지 않음 (docs/fatigue_vs_fresh_metadata_policy.md)",
+  "rpe": 7,
+  "rpe_scale": "0-10",
+  "inning": null,
+  "pitch_count": 42,
+  "session_block": "bullpen",
+  "elapsed_min": 35,
+  "fresh_window": {
+    "trial_indices": [0, 1, 2],
+    "pitch_nos": [1, 2, 3],
+    "note": "워밍업 직후"
+  },
+  "fatigued_window": {
+    "trial_indices": [8, 9, 10],
+    "pitch_nos": [9, 10, 11],
+    "note": "RPE 7 이후"
+  },
+  "trial_tags": [
+    { "trial_index": 0, "tag": "fresh", "source": "coach" },
+    { "trial_index": 1, "tag": "fresh", "source": "coach" },
+    { "trial_index": 9, "tag": "fatigued", "source": "rpe_threshold" },
+    { "trial_index": 10, "tag": "fatigued", "source": "rpe_threshold" }
+  ],
+  "provenance": {
+    "source": "manual",
+    "recorded_by": "sample_only"
+  }
+}

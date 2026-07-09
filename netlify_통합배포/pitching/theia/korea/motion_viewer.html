@@ -92,6 +92,7 @@
       <div id="legend"></div>
       <div id="cmpName"></div>
       <div id="ballNote">● <b>흰 공(빨간 실밥)</b> = 던지는 손 · 릴리스 후 <b style="color:#E0303A">빨간 궤적</b> = 공 비행(표기 구속·중력 기반 <b>추정</b>, 실제 공 트래킹 아님)</div>
+      <div id="grfEstNote" style="display:none;position:absolute;left:10px;top:10px;font-size:11px;color:#FFE39A;background:rgba(9,13,26,.62);border:1px solid #5a4a26;border-radius:7px;padding:4px 9px;line-height:1.4;max-width:min(560px,72%);z-index:5">● <b style="color:#FFD166">지면반력 화살표 = 추정</b> — 이 세션은 힘판 미측정. 무게중심 가속도 기반 <b>추정</b>(참고용·상대적 크기), 실측 아님.</div>
       <div id="rpsBox"></div>
       <div id="err"></div>
     </div>
@@ -377,7 +378,41 @@ const grfLeadA=makeArrow(0xFFFFFF,13,false), grfRearA=makeArrow(0xFFF0C0,16,fals
 const grfLeadB=makeArrow(C.GHOST,10,true), grfRearB=makeArrow(C.GHOST,12,true);
 const _yUp=new THREE.Vector3(0,1,0);
 // 힘은 추출 단계에서 이미 뷰어 정규축(x=측방, y=수직 up, z=stride)으로 회전됨 → 그대로 사용.
+/* [2026-07-09] 힘판 미측정 세션(고려대) 추정 GRF — 무게중심 가속도 기반 F≈m(a_com−g),
+   앞발/뒷발은 발 접지 높이 가중으로 배분. 실측 아님·표시(시각) 참고용.
+   네이티브 축에서 계산 → 렌더가 viewVec로 X미러(카이랄리티 일관). 시계열(분석)엔 미반영. */
+var _EST_SCALE=0.6; // 2차미분 과대추정 보정(실측 대비 ~1.6배) — 표시 크기 시각 매칭
+function _buildGrfEst(trial){
+  try{
+    var s=trial.series||{}, fy1=s.FP1_Y||[], fy2=s.FP2_Y||[], meas=0;
+    for(var i=0;i<fy1.length;i++) meas+=Math.abs(fy1[i]||0)+Math.abs(fy2[i]||0);
+    if(meas>1e3) return null;                       // 실측 힘판 존재 → 추정 안 함(실측 그대로)
+    var f=trial.frames, n=f.length, m=(trial.mass_kg||75), dt=(trial.dt||0.004);
+    var ci=(IDX.com!=null)?IDX.com:IDX.pelvis_o;
+    var px=[],py=[],pz=[];
+    for(var i=0;i<n;i++){ var p=f[i][ci]||(i>0?[px[i-1],py[i-1],pz[i-1]]:[0,0,0]); px.push(p[0]);py.push(p[1]);pz.push(p[2]); }
+    var W=Math.max(5,(Math.round(0.04/dt)|1));       // ~40ms 스무딩(홀수)
+    function sm(a){ var h=W>>1,o=[]; for(var i=0;i<n;i++){ var t=0,c=0; for(var k=-h;k<=h;k++){var j=i+k; if(j>=0&&j<n){t+=a[j];c++;}} o.push(t/c);} return o; }
+    var sx=sm(sm(px)), sy=sm(sm(py)), sz=sm(sm(pz)), G=9.81, MM=1000;
+    function fyH(side,i){ var h=f[i][IDX[trial['_'+side]+'_heel']], o=f[i][IDX[trial['_'+side]+'_toe']], v=1e9; if(h&&h[1]<v)v=h[1]; if(o&&o[1]<v)v=o[1]; return v; }
+    var gy0=(trial._gy!=null)?trial._gy:(function(){var lo=1e9;for(var i=0;i<n;i++){var a=fyH('lead',i),b=fyH('rear',i);if(a<lo)lo=a;if(b<lo)lo=b;}return lo<1e9?lo:0;})();
+    var BAND=80, lead=[], rear=[];
+    for(var i=0;i<n;i++){
+      var im=Math.max(1,Math.min(n-2,i));
+      var ax=(sx[im+1]-2*sx[im]+sx[im-1])/(dt*dt)/MM, ay=(sy[im+1]-2*sy[im]+sy[im-1])/(dt*dt)/MM, az=(sz[im+1]-2*sz[im]+sz[im-1])/(dt*dt)/MM;
+      var Fx=m*ax*_EST_SCALE, Fy=m*(ay+G)*_EST_SCALE, Fz=m*az*_EST_SCALE;   // GRF=m(a−g), g=(0,−G,0)
+      var hl=Math.max(0,fyH('lead',i)-gy0), hr=Math.max(0,fyH('rear',i)-gy0);
+      var wl=Math.max(0,1-hl/BAND), wr=Math.max(0,1-hr/BAND), ws=wl+wr;
+      if(ws<1e-3){ lead.push([0,0,0]); rear.push([0,0,0]); continue; }        // 양발 공중 → 0
+      lead.push([Fx*wl/ws, Fy*wl/ws, Fz*wl/ws]);
+      rear.push([Fx*wr/ws, Fy*wr/ws, Fz*wr/ws]);
+    }
+    return {lead:lead, rear:rear};
+  }catch(e){ return null; }
+}
 function grfVec(trial,plate,i){
+  if(trial._grfEst===undefined) trial._grfEst=_buildGrfEst(trial);
+  if(trial._grfEst){ var arr=trial._grfEst[plate==='FP2'?'lead':'rear']; var je=Math.min(i,arr.length-1); return arr[je]||[0,0,0]; }
   const gx=trial.series[plate+'_X'],gy=trial.series[plate+'_Y'],gz=trial.series[plate+'_Z'];
   const j=Math.min(i,(gz||[]).length-1);
   const X=gx&&gx[j]!=null?gx[j]:0, Y=gy&&gy[j]!=null?gy[j]:0, Z=gz&&gz[j]!=null?gz[j]:0;
@@ -487,12 +522,12 @@ const gaugeEls = GA.map(g=>{
   sideEl.appendChild(d); return {el:d, fill:d.querySelector('.fill'), val:d.querySelector('.gv'), pk:d.querySelector('.pk')};
 });
 function gVal(trial,g,idx){
-  if(g.grf){ const x=trial.series[g.grf+'_X'],y=trial.series[g.grf+'_Y'],z=trial.series[g.grf+'_Z']; const j=Math.min(idx,(z||[]).length-1);
-    const X=x&&x[j]!=null?x[j]:0,Y=y&&y[j]!=null?y[j]:0,Z=z&&z[j]!=null?z[j]:0; return Math.hypot(X,Y,Z)/((trial.mass_kg||75)*9.81)*100; }
+  if(g.grf){ const Fv=grfVec(trial,g.grf,idx); return Math.hypot(Fv[0],Fv[1],Fv[2])/((trial.mass_kg||75)*9.81)*100; }  /* 실측 또는 추정(힘판=0 세션) 동일 경로 */
   const s=trial.series[g.k]; if(!s)return null; let v=s[Math.min(idx,s.length-1)]; if(v==null)return null; if(g.abs)v=Math.abs(v); return v;
 }
 function updateGauges(trial,idx){
   GA.forEach((g,i)=>{ const v=gVal(trial,g,idx); const el=gaugeEls[i];
+    if(g.grf){ var _lb=el.el.querySelector('.gl span'); if(_lb) _lb.textContent=g.name+(trial._grfEst?' (추정)':''); }  /* 힘판 미측정 세션이면 게이지 라벨에 추정 표기 */
     if(v==null){el.val.textContent='—';el.fill.style.width='0%';return;}
     const pct=Math.max(0,Math.min(100,(v-g.lo)/(g.hi-g.lo)*100));
     el.fill.style.width=pct+'%'; el.val.textContent=Math.round(v)+' '+g.unit;
@@ -764,6 +799,11 @@ function frame(){
   }catch(e){}
   setArrow(grfLeadA, footBase(A,A.frames[ia],'lead'), viewVec(grfVec(A,'FP2',ia),A), 1.0, A._gy);
   setArrow(grfRearA, footBase(A,A.frames[ia],'rear'), viewVec(grfVec(A,'FP1',ia),A), 1.0, A._gy);
+  /* [2026-07-09] 추정 GRF(힘판 미측정 세션) 시각 구분 — 배지 표시 + 화살표 반투명 */
+  try{ var _est=!!(A._grfEst!==undefined?A._grfEst:(A._grfEst=_buildGrfEst(A)));
+    var _gen=document.getElementById('grfEstNote'); if(_gen) _gen.style.display=_est?'block':'none';
+    [grfLeadA,grfRearA].forEach(function(ar){ ['shaft','head'].forEach(function(k){ ar[k].material.transparent=_est; ar[k].material.opacity=_est?0.7:1.0; }); });
+  }catch(e){}
   drawComTrail(A.frames,ia,A);
   updateLabels(A.frames[ia],A,ia); updateGauges(A,ia);
   /* [2026-06-19] 스틱 자동 중앙배열 — 활성 선수 골반(없으면 COM)을 카메라 타깃으로 부드럽게 추종(화면 중앙 유지).

@@ -394,18 +394,18 @@ function _buildGrfEst(trial){
     var W=Math.max(5,(Math.round(0.05/dt)|1));       // ~50ms 스무딩(홀수) — 힘판39선수 보정 스위트스팟(≈8Hz)
     function sm(a){ var h=W>>1,o=[]; for(var i=0;i<n;i++){ var t=0,c=0; for(var k=-h;k<=h;k++){var j=i+k; if(j>=0&&j<n){t+=a[j];c++;}} o.push(t/c);} return o; }
     var sx=sm(sm(px)), sy=sm(sm(py)), sz=sm(sm(pz)), G=9.81, MM=1000;
-    function fyH(side,i){ var h=f[i][IDX[trial['_'+side]+'_heel']], o=f[i][IDX[trial['_'+side]+'_toe']], v=1e9; if(h&&h[1]<v)v=h[1]; if(o&&o[1]<v)v=o[1]; return v; }
-    var gy0=(trial._gy!=null)?trial._gy:(function(){var lo=1e9;for(var i=0;i<n;i++){var a=fyH('lead',i),b=fyH('rear',i);if(a<lo)lo=a;if(b<lo)lo=b;}return lo<1e9?lo:0;})();
-    var BAND=80, lead=[], rear=[];
+    // [2026-07-09 FIX] 발별 배분 = 착지(FC) 이벤트 기반. 이전 발높이 임계 방식은 마운드/마커로 두 발
+    //   접지높이가 달라 리드발을 항상 '공중'으로 오판→힘 전부 뒷발로 몰림(표시오류). 투구는 드라이브=축발
+    //   단일지지→착지→리드발 단일지지라, FC 전=뒷발·후=리드로 배분(FC 부근 이중지지 블렌드)이 정확·견고.
+    var fc=(trial.events&&trial.events.i_fc!=null)?trial.events.i_fc:Math.round(n*0.62);
+    var Wt=Math.max(4,Math.round(0.05/dt)); var lead=[], rear=[];   // ~50ms 이중지지 블렌드
     for(var i=0;i<n;i++){
       var im=Math.max(1,Math.min(n-2,i));
       var ax=(sx[im+1]-2*sx[im]+sx[im-1])/(dt*dt)/MM, ay=(sy[im+1]-2*sy[im]+sy[im-1])/(dt*dt)/MM, az=(sz[im+1]-2*sz[im]+sz[im-1])/(dt*dt)/MM;
       var Fx=m*ax*_EST_SCALE, Fy=m*(ay+G)*_EST_SCALE, Fz=m*az*_EST_SCALE;   // GRF=m(a−g), g=(0,−G,0)
-      var hl=Math.max(0,fyH('lead',i)-gy0), hr=Math.max(0,fyH('rear',i)-gy0);
-      var wl=Math.max(0,1-hl/BAND), wr=Math.max(0,1-hr/BAND), ws=wl+wr;
-      if(ws<1e-3){ lead.push([0,0,0]); rear.push([0,0,0]); continue; }        // 양발 공중 → 0
-      lead.push([Fx*wl/ws, Fy*wl/ws, Fz*wl/ws]);
-      rear.push([Fx*wr/ws, Fy*wr/ws, Fz*wr/ws]);
+      var wl=Math.max(0,Math.min(1,(i-(fc-Wt/2))/Wt)), wr=1-wl;             // FC 전=뒷발(추진)·후=리드(제동)
+      lead.push([Fx*wl, Fy*wl, Fz*wl]);
+      rear.push([Fx*wr, Fy*wr, Fz*wr]);
     }
     return {lead:lead, rear:rear};
   }catch(e){ return null; }

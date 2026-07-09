@@ -175,7 +175,6 @@ canvas.chart.tall{height:320px}
 .bm-ceil-sub{font-size:12px;color:var(--fg2);font-variant-numeric:tabular-nums}
 .bm-ceil-arrow{font-size:14px;color:var(--fg2);text-align:center}
 .bm-note{font-size:12px;color:var(--fg2);text-align:center;margin-bottom:10px;font-style:italic}
-@media (max-width:760px){ .bm-ceiling{grid-template-columns:1fr;gap:6px} .bm-ceil-arrow{display:none} .bm-row{grid-template-columns:1fr 70px;gap:6px} .bm-row-bar,.bm-row-mph{display:none} }
 .bm-overview{background:linear-gradient(135deg,var(--bg1),var(--bg2));border:1px solid var(--line);border-radius:10px;padding:18px}
 .bm-overview-grid{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:12px;margin-top:14px}
 .bm-ov-card{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
@@ -269,12 +268,6 @@ canvas.chart.tall{height:320px}
 /* ── Chip ── */
 .chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:.3px}
 
-@media (max-width:1100px){
-  .summary-grid,.summary-secondary{grid-template-columns:repeat(2,1fr)}
-  .grf-grid{grid-template-columns:1fr}
-  .grf-grid > .card:first-child{grid-column:auto}
-  .bm-overview-grid,.coach-headline-grid{grid-template-columns:1fr}
-}
 
 /* ── Uplift link + Uplift X-Check tab (v0.2.1) ── */
 .uplift-link{display:inline-flex;align-items:center;gap:6px;background:rgba(91,211,255,.10);color:var(--cyan);border:1px solid var(--cyan);padding:8px 14px;border-radius:8px;text-decoration:none;font-size:12px;font-weight:700;letter-spacing:.2px;transition:.15s;flex-shrink:0}
@@ -621,16 +614,6 @@ body.report-mode-coach.coach-aux-expanded .var-stick-viz-panel.aux-expanded{max-
   body.report-mode-coach .stick-controls,
   body.report-mode-coach .stick-transport-host #gt-bar{padding:6px 8px}
 }
-@media (max-width:1100px){
-  body.report-mode-coach main.layout{
-    grid-template-columns:1fr;overflow-y:auto;align-content:start;min-height:0;flex:1 1 auto;
-  }
-  body.report-mode-coach .left-panel.skeleton-panel-wrap{height:auto;max-height:min(62dvh,640px);flex:0 0 auto;min-height:0}
-  body.report-mode-coach .right-panel.feedback-panel{
-    height:auto;max-height:min(72dvh,920px);min-height:0;flex:1 1 auto;
-    overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;-webkit-overflow-scrolling:touch;
-  }
-}
 .coach-scene-labels{position:absolute;inset:0;pointer-events:none;z-index:14;overflow:hidden}
 .coach-scene-label-chip{
   position:absolute;transform:translate(-50%,-100%);margin-top:-6px;
@@ -729,14 +712,6 @@ body.report-mode-coach:not(.research-split-expert-layout) main.layout{/* coach 2
 body.research-split-expert-layout .research-split-resize-handle{display:block}
 body.research-split-resizing,body.research-split-resizing *{user-select:none!important}
 body.research-split-resizing #three canvas{pointer-events:none}
-@media (max-width:1100px){
-  body.research-split-expert-layout main.layout{grid-template-columns:1fr;overflow-y:auto;align-content:start;gap:16px}
-  body.research-split-expert-layout .left-panel.skeleton-panel-wrap{grid-column:1;height:auto;max-height:min(62dvh,640px);flex:0 0 auto}
-  body.research-split-expert-layout .right-panel.feedback-panel{grid-column:1;grid-template-columns:1fr;height:auto;overflow-y:auto}
-  body.research-split-expert-layout .research-split-resize-handle{display:none!important}
-  body.research-split-expert-layout .right-panel>.page{max-height:none}
-  body.research-split-expert-layout #report-side-panel{position:static;max-height:none;max-width:none;min-width:0}
-}
 body.report-mode-coach .fv-long-text,body.report-mode-coach .fv-coach-fold,body.report-mode-coach .fv-analyst-fold{display:none!important}
 body.report-mode-coach .phase-var-inspector-body .var-inspector-deep,body.report-mode-coach .phase-var-inspector-body .var-detail-explain{display:none}
 body.report-mode-coach .phase-var-inspector-layout .phase-var-group-acc{display:none}
@@ -834,7 +809,6 @@ body:not([data-audit-ui="1"]) .report-audit-only{display:none!important}
 .cg-ev-row span:first-child{color:var(--fg1)}
 .cg-ev-row b{color:var(--fg0);font-variant-numeric:tabular-nums;margin-left:auto}
 .cg-ev-hs{font-size:12px;color:var(--fg2);min-width:44px;text-align:right}
-@media (max-width:1100px){ .cg-row,.cg-row.cg-drive,.cg-ev-wrap{grid-template-columns:1fr 1fr} }
 .cg-briefing-divider{margin:26px 0 14px;font-size:15px;font-weight:800;color:var(--fg0);border-top:1px solid var(--line);padding-top:18px;letter-spacing:.2px}
 
 /* ── Session Summary (Uplift) ── */
@@ -884,7 +858,6 @@ body:not([data-audit-ui="1"]) .report-audit-only{display:none!important}
 .ie-heatmap{display:grid;grid-auto-flow:column;grid-auto-columns:10px;gap:3px;justify-content:end}
 .ie-cell{width:10px;height:10px;border-radius:2px;background:#243043}
 .ie-cell.flagged{background:var(--red)} .ie-cell.clean{background:#1c4937}
-@media (max-width:1100px){ .ss-kseq-grid,.ss-xf-grid,.ss-stride-grid{grid-template-columns:1fr} }
 
 /* ── 비효율 탭: Uplift 5국면(Energy Leak) ── */
 .ie-phase{background:var(--bg1);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:14px}
@@ -896,7 +869,6 @@ body:not([data-audit-ui="1"]) .report-audit-only{display:none!important}
 .ie-phase-en{font-size:12px;color:var(--fg2);font-weight:600;margin-left:6px}
 .ie-phase-desc{font-size:12px;color:var(--fg1);line-height:1.5;margin-top:4px}
 .ie-card-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-@media (max-width:760px){ .ie-card-grid{grid-template-columns:1fr} .ie-phase-top{flex-direction:column;align-items:flex-start} }
 .ie-card{background:#11151d;border-radius:8px;padding:10px 12px}
 .ie-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .ie-card-name{font-size:13px;font-weight:700;color:var(--fg0)}
@@ -910,7 +882,6 @@ body:not([data-audit-ui="1"]) .report-audit-only{display:none!important}
 
 /* ── BioMotion: 5각 레이더 + 기대구속 ── */
 .bm-top{display:grid;grid-template-columns:1.1fr 1fr;gap:14px}
-@media (max-width:900px){ .bm-top{grid-template-columns:1fr} }
 .bm-radar-card,.bm-ceil-card{background:var(--bg1);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
 .bm-radar-ttl{font-size:12px;color:var(--fg1);font-weight:700;text-transform:uppercase;letter-spacing:.3px}
 .bm-radar-ttl span{color:var(--fg2);font-weight:500;text-transform:none;margin-left:6px;font-size:12px}
@@ -1020,7 +991,6 @@ body:not([data-audit-ui="1"]) .report-audit-only{display:none!important}
 .bm-leg-cell{display:flex;flex-direction:column;gap:5px}
 .bm-leg-cell span{line-height:1.4}
 .bm-leg-chips{display:flex;gap:10px;font-weight:700;font-size:11.5px}
-@media (max-width:760px){ .bm-pri-grid{grid-template-columns:1fr} .bm-legend-grid{grid-template-columns:1fr 1fr} }
 /* sticky 페이즈 내비게이션 (ISSUE-04) */
 .bm-phase-nav{position:sticky;top:calc(var(--chrome-spacer-h,148px) + 4px);z-index:15;display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--bg0);border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin-bottom:12px;flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 body.scroll-nav-collapsed .bm-phase-nav{top:calc(var(--chrome-spacer-h,48px) + 2px)}
@@ -1032,7 +1002,6 @@ body.scroll-nav-collapsed .bm-phase-nav{top:calc(var(--chrome-spacer-h,48px) + 2
 .bm-nav-filter.on{background:var(--amber);color:#10121a;border-color:var(--amber)}
 .bm-card{scroll-margin-top:calc(var(--chrome-spacer-h,148px) + 16px)}
 .bm-filter-flag .bm-row:not([data-bm="flag"]):not(.bm-row-header){display:none}
-@media (max-width:760px){ .bm-phase-nav{top:0} }
 @media print{
   /* === 인쇄 전용 라이트 테마(MODE-02): 화면은 다크 유지, 출력만 흰 바탕 === */
   /* 표면/잉크 토큰만 라이트로 전환 — 강조·데이터 색(green/amber/cyan/red 등)은 그대로 유지 */

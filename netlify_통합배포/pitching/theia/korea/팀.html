@@ -8,7 +8,7 @@
 <style>
   :root{--bg:#0f1420;--panel:#161d2b;--panel2:#1a2130;--line:#26324a;--text:#e8ecf2;--sub:#93a6bd;--faint:#5d6b82;--gold:#e8c56a;--good:#5fce8f;--warn:#e88f6a;--bad:#e0687f;--blue:#7fb0ee}
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:Pretendard,-apple-system,sans-serif;padding-bottom:40px}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:Pretendard,-apple-system,sans-serif;padding-bottom:40px;min-width:1280px}
   .cond{font-family:Pretendard,sans-serif} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
   .topbar{background:linear-gradient(90deg,#1a2740,#141a26);border-bottom:1px solid var(--line);color:#cfe0f5;font-size:12.5px;font-weight:600;padding:8px 20px;text-align:center;line-height:1.5}
   header{padding:22px 28px 8px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
@@ -22,7 +22,7 @@
   .sortbar span{font-size:12px;color:var(--faint)}
   .sortbar button{background:var(--panel2);color:var(--sub);border:1px solid var(--line);border-radius:7px;padding:5px 12px;font-size:12.5px;font-weight:700;cursor:pointer}
   .sortbar button.on{background:var(--gold);color:#111;border-color:var(--gold)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;padding:14px 28px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;padding:14px 28px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:15px 17px 16px;cursor:pointer;transition:border-color .15s,transform .1s;text-decoration:none;color:inherit;display:block}
   .card:hover{border-color:var(--gold);transform:translateY(-2px)}
   .chead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}

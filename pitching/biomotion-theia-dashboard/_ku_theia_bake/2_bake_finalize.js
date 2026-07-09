@@ -91,6 +91,10 @@ for(const folder of Object.keys(reuse)){
     FIT[x.name]={ overall_score:hp.overall_score, axes:(hp.axes||[]).map(a=>({key:a.key,label_kr:a.label_kr,value:a.value,unit:a.unit,score:a.score,elite_target:(a.elite_target!=null?a.elite_target:''),norm_pct:(a.norm_pct!=null?a.norm_pct:null),velo_group:(a.velo_group||'')})), source:'고려대 VALD(0628)' };
   }
 }
+// [2026-07-09] 힘판 미측정(grf_absent) → GRF 임펄스 변인 ML 추정 주입(재베이크 시 자동 재생성·표시전용·"추정" 표기).
+//   블록 앞발수직임펄스(A)·드라이브 뒷발추진임펄스(B). 제동·peak는 이중계산/원리한계로 제외. 모델=_분석/grf_ml.
+try { require("./grf_estimate_inject.js").injectGrfEstimate(PLAYERS); }
+catch(e){ console.warn("  [grf-estimate] 추정 주입 스킵(모델/규준 확인):", e.message); }
 // 파일 출력
 const D=path.join(ROOT,"netlify_통합배포/pitching/theia/korea/데이터"); fs.mkdirSync(D,{recursive:true});
 fs.writeFileSync(path.join(D,"players.js"), "window.PLAYERS = "+JSON.stringify(PLAYERS)+";\nwindow.PLAYER_ORDER = "+JSON.stringify(PLAYER_ORDER)+";\n");

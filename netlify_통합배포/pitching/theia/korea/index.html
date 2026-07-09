@@ -3806,7 +3806,7 @@ function App() {
     try{ window.__THEIA_BALANCE = (_curRec && _curRec.balance && _curRec.balance.items && _curRec.balance.items.length) ? _curRec.balance : null; }catch(e){ window.__THEIA_BALANCE=null; }   /* [2026-06-20] 좌우 밸런스(전두면·참고) */
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerQS, setViewerQS] = useState("");
-  const viewerSrc = () => "motion_viewer.html?v=kuv8&player=" + encodeURIComponent(curPlayer) + ((window.BM_INTEG01 && window.BM_INTEG01.isDynamicPlayer && window.BM_INTEG01.isDynamicPlayer(curPlayer)) ? "&src=session" : "") + (viewerQS ? "&" + viewerQS : "");
+  const viewerSrc = () => "motion_viewer.html?v=kuv9&player=" + encodeURIComponent(curPlayer) + ((window.BM_INTEG01 && window.BM_INTEG01.isDynamicPlayer && window.BM_INTEG01.isDynamicPlayer(curPlayer)) ? "&src=session" : "") + (viewerQS ? "&" + viewerQS : "");
   const handlePlayerChange = (p) => { setCurPlayer(p); setViewerQS(""); setHot(null); try { window.history.replaceState(null, "", "?player=" + encodeURIComponent(p)); } catch (e) {} };
   window.__openViewer = (qs) => { setViewerQS(qs || ""); setViewerOpen(true); };
   window.__kuGoTab = (newTab) => { if (!newTab || !TABS.some(function (t) { return t.key === newTab; })) return; setTab(newTab); try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) {} };

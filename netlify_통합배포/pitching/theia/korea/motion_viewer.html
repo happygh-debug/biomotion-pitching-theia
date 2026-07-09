@@ -381,7 +381,7 @@ const _yUp=new THREE.Vector3(0,1,0);
 /* [2026-07-09] 힘판 미측정 세션(고려대) 추정 GRF — 무게중심 가속도 기반 F≈m(a_com−g),
    앞발/뒷발은 발 접지 높이 가중으로 배분. 실측 아님·표시(시각) 참고용.
    네이티브 축에서 계산 → 렌더가 viewVec로 X미러(카이랄리티 일관). 시계열(분석)엔 미반영. */
-var _EST_SCALE=0.6; // 2차미분 과대추정 보정(실측 대비 ~1.6배) — 표시 크기 시각 매칭
+var _EST_SCALE=1.0; // [2026-07-09 보정] 힘판39선수 실증: 50ms 스무딩+scale 1.0에서 수직 피크오차 ~0.8%·상관 0.86
 function _buildGrfEst(trial){
   try{
     var s=trial.series||{}, fy1=s.FP1_Y||[], fy2=s.FP2_Y||[], meas=0;
@@ -391,7 +391,7 @@ function _buildGrfEst(trial){
     var ci=(IDX.com!=null)?IDX.com:IDX.pelvis_o;
     var px=[],py=[],pz=[];
     for(var i=0;i<n;i++){ var p=f[i][ci]||(i>0?[px[i-1],py[i-1],pz[i-1]]:[0,0,0]); px.push(p[0]);py.push(p[1]);pz.push(p[2]); }
-    var W=Math.max(5,(Math.round(0.04/dt)|1));       // ~40ms 스무딩(홀수)
+    var W=Math.max(5,(Math.round(0.05/dt)|1));       // ~50ms 스무딩(홀수) — 힘판39선수 보정 스위트스팟(≈8Hz)
     function sm(a){ var h=W>>1,o=[]; for(var i=0;i<n;i++){ var t=0,c=0; for(var k=-h;k<=h;k++){var j=i+k; if(j>=0&&j<n){t+=a[j];c++;}} o.push(t/c);} return o; }
     var sx=sm(sm(px)), sy=sm(sm(py)), sz=sm(sm(pz)), G=9.81, MM=1000;
     function fyH(side,i){ var h=f[i][IDX[trial['_'+side]+'_heel']], o=f[i][IDX[trial['_'+side]+'_toe']], v=1e9; if(h&&h[1]<v)v=h[1]; if(o&&o[1]<v)v=o[1]; return v; }

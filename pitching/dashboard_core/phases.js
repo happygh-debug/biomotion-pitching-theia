@@ -19,7 +19,17 @@
     return { v: b === -Infinity ? null : a[bi], i: bi };
   }
   function valAt(a, i) { return (a && i != null && i < a.length && isFinite(a[i])) ? a[i] : null; }
-  function integ(a, lo, hi, dt, sign) { if (!a) return null; var s = 0; for (var i = lo; i < hi && i < a.length; i++) { var v = a[i]; if (!isFinite(v)) continue; if (sign > 0 && v < 0) continue; if (sign < 0 && v > 0) continue; s += v * dt; } return s; }
+  /* [2026-08-12 코덱스 P1-1 확정 반영] 창 부적격·유효 표본 0 → null(0 아님 — 0은 실측값이라 결측 대체 금지).
+     ①lo/hi null이면 옛 코드는 null<hi 비교(null→0 강제)로 0부터 몰래 적분했다 → null 반환.
+     ②창 안에 finite 표본이 하나도 없으면(전부 NaN·빈 창·역전 창) → null 반환.
+     ★값 보존: finite 표본이 있는데 부호 필터로 전부 걸러진 경우(예: 음의 파워만 있는 ∫P⁺)는
+       물리적으로 유효한 0이므로 그대로 0 — 기존 유효 산출값은 전부 불변. */
+  function integ(a, lo, hi, dt, sign) {
+    if (!a || lo == null || hi == null || !(hi > lo) || !dt) return null;
+    var s = 0, nf = 0;
+    for (var i = lo; i < hi && i < a.length; i++) { var v = a[i]; if (!isFinite(v)) continue; nf++; if (sign > 0 && v < 0) continue; if (sign < 0 && v > 0) continue; s += v * dt; }
+    return nf ? s : null;
+  }
   function deriv(a, dt) { var o = []; for (var i = 0; i < a.length; i++) o.push((i === 0 || !isFinite(a[i]) || !isFinite(a[i - 1])) ? NaN : (a[i] - a[i - 1]) / dt); return o; }
   function r1(x) { return x == null ? null : Math.round(x * 10) / 10; }
   function r2(x) { return x == null ? null : Math.round(x * 100) / 100; }
@@ -40,7 +50,7 @@
       var ikl = ev.i_kl_peak || 0, ifc = ev.i_fc, ibr = ev.i_br;
       var pctf = function (v) { return v == null ? null : v / bw * 100; };
       var rearHipMom = RHP ? S.R_Hip_Moment_Z : S.L_Hip_Moment_Z;
-      var merPk = peak(S.Pitching_Shoulder_Angle_Z, ifc, ibr, false).v;
+      var merPk = peak(S.Pitching_Shoulder_Angle_Z, ifc, ibr, true).v;  /* [2026-08-12 코덱스 P1-2] signed→max-abs 통일 — 실데이터 65명 전수에서 두 방식 동일(양수 관례 채널)·값 불변. 방어적 규약 통일 */
       var scapLoad = absn(valAt(S.Pitching_Shoulder_Angle_X, ifc));  // 견갑골 로딩 프록시: FC 어깨 수평외전 |각| (마커리스 견갑골 직접측정 불가)
       // [2026-06-05 정책] X-Factor SSOT = trial.x_factor (Trunk_wrt_Pelvis_Angle_Z · 골반 기준 몸통 Z축 상대회전) KH→BR peak.
       //   Uplift: vendor max_x_factor 헤드라인 폴백 가능 · 파생 타이밍은 항상 trial.x_factor.
@@ -85,13 +95,21 @@
         ? Math.max(pelMax != null ? Math.abs(pelMax - pelStart) : 0, pelMin != null ? Math.abs(pelMin - pelStart) : 0)
         : null;
       // 힙 힌지: KH 이전 뒷고관절(스탠스다리) 시상면 최대 굴곡 — "뒷고관절에 앉아" 적재. 좌우 무관(Back_Hip=스탠스다리 기준). pelClose/freeMo와 r≈0.5(보완적 시상면 적재)
-      var hipHinge = peak(S.Back_Hip_Angle_X, 0, ikl, false).v;
+      /* [2026-08-02 정의 변경 · 교수 확정] 시작~KH → 니하이(KH)~앞발착지(FC) 드라이브 구간 최대.
+         근거·밴드 재산출 = _ku_theia_bake/HANDOVER_hipHinge_drivewindow_260707.md.
+         옛 창은 선수마다 피크 위치가 구간의 0~100%로 흩어지고 일부는 셋업 자세를 잡았다.
+         새 창은 '뒷고관절에 앉는' 실제 적재 구간이다(피크가 KH~FC의 70~90%에 몰림). */
+      var hipHinge = peak(S.Back_Hip_Angle_X, ikl, (ifc != null ? ifc : ibr), false).v;
       var tzRaw = valAt(S.Trunk_Angle_Z, ifc);
       var openAng = UPLIFT ? ((t.trunk_fc && t.trunk_fc.openAng!=null)?t.trunk_fc.openAng:null) : (tzRaw == null ? null : (RHP ? (90 - tzRaw) : (tzRaw - 90)));
       var txRaw = valAt(S.Trunk_Angle_X, ifc);
       var leanBack = UPLIFT ? ((t.trunk_fc && t.trunk_fc.leanBack!=null)?t.trunk_fc.leanBack:null) : (txRaw == null ? null : -txRaw);
-      var rearPropN = peak(S.FP1_Y, ikl, ifc, false).v;
-      var propImp = integ(S.FP1_Y, ikl, ifc, dt, 1);
+      // ★[2026-10-12 교수 「권장대로」] 추진 점수 변인(최대힘·임펄스·peak 타이밍)에 진행 부호 적용 — 뒷발판 FP1_Y 는 진행 방향과 같은 부호(확정판 358/358 검증 · 2026-10-11)라
+      //   +Y 로 던진 세션(코호트·현장 전부)은 값 불변 · 반대 방향으로 던진 세션(옛 고려대 꼴)은 전엔 0 으로 떨어졌음 → 진행 부호 = KH→FC COM_Velocity_Y 평균의 부호(없으면 +1)
+      var _fwdSign = (function () { var cv = S.COM_Velocity_Y; if (!cv || ikl == null || ifc == null || !(ifc > ikl)) return 1; var s = 0, n = 0; for (var i = ikl; i < ifc && i < cv.length; i++) { if (isFinite(cv[i])) { s += cv[i]; n++; } } return (n && s < 0) ? -1 : 1; })();
+      var _fp1Fwd = S.FP1_Y ? S.FP1_Y.map(function (x) { return isFinite(x) ? _fwdSign * x : x; }) : S.FP1_Y;
+      var rearPropN = peak(_fp1Fwd, ikl, ifc, false).v;
+      var propImp = integ(_fp1Fwd, ikl, ifc, dt, 1);
       var comVel = peak(S.COM_Velocity_Y, ikl, ibr, false).v;
       // COM 수직 낙하 (KH→FC, cm) — 마운드 내리막+하체로 위치E→전진 운동량. 검증(34명): 엘리트>상동고 p=.004, 구속 r=.52.
       var comVDrop = (function(){ var z = S.COM_displacement_Z; if (!z || ikl == null || ifc == null || !isFinite(z[ikl]) || !isFinite(z[ifc])) return null; return (z[ikl] - z[ifc]) * 100; })();
@@ -131,12 +149,18 @@
         for (var i = ifc; i <= ibr && i < cv.length; i++) if (isFinite(cv[i])) vMin = Math.min(vMin, Math.abs(cv[i]));
         return vFC - vMin;
       })();
-      var kneeBrace = absn(peak(RHP ? S.L_Knee_Moment_X : S.R_Knee_Moment_X, ifc, ibr, true).v);  // 리드무릎 버팀(굴곡저항) 모멘트 크기(N·m). 부호규약이 데이터셋마다 반대(이준우+/기준−)라 절대값 사용
+      var kneeBrace = absn(peak(RHP ? S.L_Knee_Moment_X : S.R_Knee_Moment_X, ifc, ibr, true).v);  // 리드무릎 버팀(굴곡저항) 모멘트 크기(N·m). 부호규약이 데이터셋마다 반대(한 선수+/기준−)라 절대값 사용
       // [FIX 2026-05-25] 앞발 AP 제동력 = 착지 시 전방(+FP2_Y) peak. 기존 -FP2_Y는 후방 작은 값(잘못)이었음.
       // (타이밍 검증: 앞발 수직 GRF peak 순간 Fy=+919N. MR3 +Fy=홈방향=제동력.)
       var leadApGrfN = peak(S.FP2_Y || [], ifc, ibr, false).v;
       // [2026-06-10 4d-A] FP(포스플레이트) 채널 부재 시 0이 아니라 null — 자체 산출 불가 변인은 '없음'이 정직(Uplift). Theia는 FP 항상 존재→가드 미발동→동작 불변(diff=0).
       var apBrakeImpulse = (function () { var a = S.FP2_Y; if (!a || !a.length) return null; var imp = integ(a.map(function (x) { return isFinite(x) ? Math.abs(x) : x; }), ifc, ibr, dt, 0); return imp == null ? null : imp / bw * 100; })();
+      /* [2026-08-12 코덱스 P1-6 착수] 수직 임펄스 정의 2벌 존재 — canonical 선언:
+         ①이 산출(점수·규준의 정본) = 저속 신호 · [FC,BR) half-open · |FP2_Z| 적분 /BW. Elite28 규준이 이 정의로 산출됨.
+         ②extract_theia grf_metrics.impulse_pct_bw_s = 고속 신호 · [FC,BR] 양끝 포함 · signed — 표시·연구용 병렬 정의.
+         ★두 정의의 값 통일(고속·signed 전환)은 원자료 검증 + 규준 재산출과 세트(보류_규준재발행_묶음) — 규준 스케일이
+         이 정의에 잠겨 있어 단독 전환 금지. 물리상 수직 GRF는 비음수라 |·|≈signed 예상이나 원자료 실증 전 불변 유지.
+         ★뷰어 frames의 FP 채널은 canonical 회전본이라 검증에 쓸 수 없음(축이 다름). */
       var leadVGRFImpulse = (function () { var a = S.FP2_Z; if (!a || !a.length) return null; var imp = integ(a.map(function (x) { return isFinite(x) ? Math.abs(x) : x; }), ifc, ibr, dt, 0); return imp == null ? null : imp / bw * 100; })();
       var kFCa = valAt(S.Lead_Knee_Angle_X, ifc), kBRa = valAt(S.Lead_Knee_Angle_X, ibr);
       var kneeExtROM = (kFCa != null && kBRa != null) ? (kFCa - kBRa) : null;
@@ -202,7 +226,7 @@
       var ppKneeTrunk = (_ptKnee != null && _ptTrunkP != null) ? (_ptTrunkP - _ptKnee) : null;
       var ppTrunkHum = (_ptTrunkP != null && _ptHumP != null) ? (_ptHumP - _ptTrunkP) : null;
       var ppShoElb = (_ptShoP != null && _ptElbP != null) ? (_ptElbP - _ptShoP) : null;
-      // 몸통→팔 전달비율 (교수 방법: 팔 총에너지 − 팔 자체생성 = 몸통에서 받은 분). 자체=어깨+팔꿈치 관절 양의 일.
+      // 몸통→팔 기여비율 (교수 방법: 팔 총에너지 − 팔 자체생성 = 몸통에서 받은 분). 자체=어깨+팔꿈치 관절 양의 일.
       var armTransferRatio = (function () {
         var hME = S.Pitching_Humerus_ME_X, sp = S.Pitching_Shoulder_Power_X, ep = S.Pitching_Elbow_Power_X, tME = S.Trunk_ME_X;
         if (!hME || !sp || !ep) return null;
@@ -225,12 +249,32 @@
       // [2026-06-23] 하체 사슬 직접전달(force power) — V3D 재설계 없이 신 데이터 *_Force_Power 채널 사용. 윈도=기존 관절일 변인과 동일(드라이브 ikl→ifc·블록 ifc→ibr). Lead/Back=핸드 해소채널(L/R 매핑 불필요).
       var backHipTransfer  = (S.Back_Hip_Force_Power_X  ? integ(S.Back_Hip_Force_Power_X,  ikl, ifc, dt, 1) : null);  // 뒷고관절 직접전달(드라이브·지면→골반)
       var backKneeTransfer = (S.Back_Knee_Force_Power_X ? integ(S.Back_Knee_Force_Power_X, ikl, ifc, dt, 1) : null);  // 뒷무릎 직접전달(드라이브)
+      // [2026-10-11 교수 「C · 지금 모두」] 뒷다리 에너지 흐름 — 방향을 보는 분절 파워(Robertson-Winter · 골반 쪽 · + = 뒷대퇴에서 골반으로 들어옴).
+      //   위 backHipTransfer 는 대퇴 쪽 관절력 파워의 양(+) 몫 = 골반에서 뒷다리로 「내려간」 몫(그 89%가 로딩 구간) — 드라이브(올라옴)가 아님.
+      //   로딩 = KH→뒷무릎 최대 굽힘(골반 → 뒷다리) · 푸시오프 = 최대 굽힘→FC(뒷다리 → 골반) · 순 에너지 전달 = KH→FC 합(+ = 뒷다리가 골반에 에너지를 더함).
+      //   골반 쪽 분절 파워·뒷무릎 각 칸은 확정판(v2.0)·C3D 길에만 있다(옛 판 = null). 단위 J/kg(체중 = 명부값 · 없으면 null).
+      //   검산: 분절 양 끝 파워 합 = 분절 에너지 변화(r .96~1.00) · 골반 쪽·대퇴 쪽 관절력 파워 합 = 0 · 근거 = 코호트 38명·OBP 100명 같은 구간 대조(10-10).
+      var _bhSP = S.Pelvis_BackHip_SP_X, _bkAng = S.Back_Knee_Angle_X, _bodyKg = (meta && meta.weight_kg) || null;
+      var _imkf = null;
+      if (_bhSP && _bkAng && ifc != null && ifc > ikl) { var _mkv = -1; for (var _q = ikl; _q < ifc && _q < _bkAng.length; _q++) { var _ak = Math.abs(_bkAng[_q]); if (isFinite(_ak) && _ak > _mkv) { _mkv = _ak; _imkf = _q; } } }
+      var _perKg = function (x) { return (x == null || !_bodyKg) ? null : x / _bodyKg; };
+      var backHipNet     = _bhSP ? _perKg(integ(_bhSP, ikl, ifc, dt, 0)) : null;                                                      // 순 에너지 전달(KH→FC 합)
+      var backHipLoad    = (_bhSP && _imkf != null) ? _perKg(integ(_bhSP, ikl, _imkf, dt, 0)) : null;                                 // 로딩(−가 보통)
+      var backHipPush    = (_bhSP && _imkf != null) ? _perKg(integ(_bhSP, _imkf, ifc, dt, 0)) : null;                                 // 푸시오프(+가 정상 방향)
+      var backHipPushLin = (S.Pelvis_BackHip_JFP_X && _imkf != null) ? _perKg(integ(S.Pelvis_BackHip_JFP_X, _imkf, ifc, dt, 0)) : null; // 푸시오프 관절력 성분(JFP)
+      var backHipPushRot = (S.Pelvis_BackHip_STP_X && _imkf != null) ? _perKg(integ(S.Pelvis_BackHip_STP_X, _imkf, ifc, dt, 0)) : null; // 푸시오프 분절 토크 성분(STP)
+      var backKneePush   = (S.Back_Thigh_Dist_SP_X && _imkf != null) ? _perKg(integ(S.Back_Thigh_Dist_SP_X, _imkf, ifc, dt, 0)) : null; // 푸시오프 때 뒷하퇴→뒷대퇴
       var leadHipTransfer  = (S.Lead_Hip_Force_Power_X  ? integ(S.Lead_Hip_Force_Power_X,  ifc, ibr, dt, 1) : null);  // 앞고관절 직접전달(블록→회전)
       var leadKneeTransfer = (S.Lead_Knee_Force_Power_X ? integ(S.Lead_Knee_Force_Power_X, ifc, ibr, dt, 1) : null);  // 앞무릎 직접전달(블록)
+      // [2026-08-12] 앞고관절 흡수(받아내기) — de Swart 2022 검증 후속. 양수(전달)적분은 구속 null(-.02·마커계 특이)이나
+      //   음수(흡수)적분은 마커리스 89명서 구속 r=+.43(comKEdrop급·통제 후 고유신호 pr=.22) — "흡수=안정 기저" 구조와 정합.
+      //   창=FC-120ms→BR(착지 직전 받아내기 포함 — 사슬 실측·FC→BR 대비 r .33→.43). 근거: _분석/obp_validation/leadhip_variants_pilot.js.
+      var _lha = (S.Lead_Hip_Force_Power_X ? integ(S.Lead_Hip_Force_Power_X, Math.max(0, ifc - Math.round(0.120 / dt)), ibr, dt, -1) : null);
+      var leadHipAbsorb = (_lha == null) ? null : Math.abs(_lha);
       // [2026-05-26] 신 Theia 직접 키네틱(투구팔 모멘트·관절력·글러브팔) — 결과 크기(3축 합) peak. (Uplift엔 채널 없어 null→필터)
       function _resultPk(pre, lo, hi){ var x=S[pre+'_X'],y=S[pre+'_Y'],z=S[pre+'_Z']; if(!x)return null; var best=null; for(var i=(lo||0);i<=hi&&i<x.length;i++){ var vx=x[i],vy=y?y[i]:0,vz=z?z[i]:0; if(!isFinite(vx))continue; var r=Math.sqrt(vx*vx+(isFinite(vy)?vy*vy:0)+(isFinite(vz)?vz*vz:0)); if(best==null||r>best)best=r; } return best; }
-      var elbowMomentPk = _resultPk('Pitching_Elbow_Moment', ifc, ibr);     // 팔꿈치 외반 부하 토크(결과)
-      var shoulderMomentPk = _resultPk('Pitching_Shoulder_Moment', ifc, ibr); // 어깨 내회전 토크(결과)
+      var elbowMomentPk = _resultPk('Pitching_Elbow_Moment', ifc, ibr);     // 팔꿈치 관절 모멘트 3축 합성 크기
+      var shoulderMomentPk = _resultPk('Pitching_Shoulder_Moment', ifc, ibr); // 어깨 관절 모멘트 3축 합성 크기
       var shoulderForcePk = _resultPk('Pitching_Shoulder_Force', ifc, ibr);   // 어깨 분리력(distraction)
       var elbowForcePk = _resultPk('Pitching_Elbow_Force', ifc, ibr);
       var gloveShPow = peak(S.Glove_Shoulder_Power_X, ifc, ibr, true).v;       // 글러브팔 어깨 파워
@@ -242,7 +286,14 @@
       var leadHipMoment = _resultPk(_lHipM, ifc, ibr);                          // 앞고관절 모멘트(블록 토크)
       var leadKneeMoment = _resultPk(_lKneeM, ifc, ibr);                        // 앞무릎 모멘트(결과·블록 강성)
       var leadKneeForce = _resultPk('Lead_Knee_Force', ifc, ibr);               // 앞무릎 관절 반력(제동 부하)
-      var backHipWork = integ(S.Back_Hip_Power_X, ikl, ifc, dt, 1);            // 뒷고관절 일(KH→FC, 드라이브 생성)
+      var backHipWork = integ(S.Back_Hip_Power_3AX_X || S.Back_Hip_Power_X, ikl, ifc, dt, 1);   // 뒷고관절 일(KH→FC, 드라이브 생성) · [10-07] 3축 칸(최종판 — 현장 앱 어댑터가 덧붙임 · 신전·외전·회전 순 파워)이 있으면 3축 · 없으면 X(굴곡·신전)만
+      // [2026-10-11 교수 「진행」] 뒷고관절 일 — 푸시오프(뒷무릎 최대 굽힘→FC) · 3축 순 파워의 양(+) 적분 · J/kg · 판정 기준 = 아래 BH_PUSH_WORK_FLOOR(3축 값).
+      //   3축 칸이 없으면 null — X 만으로 대신하지 않음(같은 구간 X 값이 3축보다 커서 기준과 맞지 않음 · 코호트 엘리트 가운데 X 0.86 vs 3축 0.76).
+      var backHipPushWork = (S.Back_Hip_Power_3AX_X && _imkf != null) ? _perKg(integ(S.Back_Hip_Power_3AX_X, _imkf, ifc, dt, 1)) : null;
+      // [2026-10-11 교수 「진행」] 앞무릎 신전 일(앞무릎 최대 굽힘→BR) · 굴곡·신전(X) 파워의 양(+) 적분 · J/kg · 참고(판정은 같은 묶음인 앞무릎 신전속도·버팀량 · 선수 사이 ρ .87 · .74).
+      //   브레이크(FC→앞무릎 최대 굽힘) 흡수는 판정하지 않음 — 크기가 공개 투수 자료(OBP)와 같은 수준이고 구속·전진 감속·몸통 회전과 관계 없음(코호트·OBP 둘 다 · 10-11).
+      var _ilkm = (S.Lead_Knee_Angle_X && ifc != null && ibr != null && ibr > ifc) ? peak(S.Lead_Knee_Angle_X, ifc, ibr, false).i : null;
+      var leadKneePush = (S.Lead_Knee_Power_X && _ilkm != null) ? _perKg(integ(S.Lead_Knee_Power_X, _ilkm, ibr, dt, 1)) : null;
       var relTimingMs = (ifc != null && ibr != null) ? (ibr - ifc) * dt * 1000 : null;
       var armSlot = valAt(S.Pitching_Shoulder_Angle_Y, ifc);
       // 스트라이드: [2026-06-01 FIX] 발끝-발끝(toe) 수평거리 우선(관용 정의·문헌 일치). 없으면 CoP, 그다음 STRIDE_LENGTH_X.
@@ -261,7 +312,7 @@
       var _ikExt = peak(deriv(S.Lead_Knee_Angle_X || [], dt).map(function (x) { return -x; }), ifc, ibr, false).i;
       var _itRot = peak(S.Thorax_Ang_Vel_Z || [], ifc, ibr, true).i;
       var kneeTrunkLag = (_ikExt != null && _itRot != null) ? (_ikExt - _itRot) * dt * 1000 : null;
-      // 무릎 활용 유형: 순 신전(kneeExtROM) ≥13° = 무릎신전-주도형(vault·이영하형), 미만 = 회전-주도형(흡수·문서준형). 둘 다 유효 엘리트 패턴(서술형)
+      // 무릎 활용 유형: 순 신전(kneeExtROM) ≥13° = 무릎신전-주도형(vault형), 미만 = 회전-주도형(흡수형). 둘 다 유효 엘리트 패턴(서술형)
       var driveType = (kneeExtROM == null) ? null : (kneeExtROM >= 13 ? '신전-vault형' : '버팀-흡수형');
       // ── 와인드업 회전 저장(preload) 스칼라 [2026-06-03 개발지침서] · PI(i_start)~KH ──
       var _is = ev.i_start;
@@ -306,7 +357,7 @@
       // ── [2026-06-03 스트라이드 재구성 v3 · 개발지침서] 3기능(전진생성·회전준비·블로킹입력) 신규 변인 ──
       //   기존 신호 재사용. 모두 KH(ikl)→FC(ifc) 또는 FC 시점. 점수화/해석타입은 mech6·report에서 결정(여기선 값만 산출).
       // (a) 추진 타이밍 — 뒷발 추진 peak가 KH→FC 중 언제(%). 너무 이르면 조기소실·늦으면 FC준비 부족.
-      var _ipp = peak(S.FP1_Y, ikl, ifc, false).i;
+      var _ipp = peak(_fp1Fwd, ikl, ifc, false).i;   // 진행 부호 적용(위 _fp1Fwd)
       var propPeakTiming = (_ipp != null && ifc != null && ikl != null && ifc > ikl) ? Math.round(100 * (_ipp - ikl) / (ifc - ikl)) : null;
       // (b) 임펄스/최대힘 비(≈유효 추진시간 s) — 짧게 세게 vs 오래 밀기.
       var impPeakRatio = (propImp != null && rearPropN != null && rearPropN > 1) ? (propImp / rearPropN) : null;
@@ -319,6 +370,38 @@
       var hssFC = xfAtFC;
       var _hssKH = (_xfArr && isFinite(_xfArr[ikl])) ? Math.abs(_xfArr[ikl]) : null;
       var hssBuildKF = (hssFC != null && _hssKH != null) ? Math.round((hssFC - _hssKH) * 10) / 10 : null;
+      /* [2026-08-12 연구원 의견·구현1] 축발 추진을 PI→KH(초기)와 KH→FC(드라이브)로 분리 + 절대(N·N·s)와 정규화(%BW·%BW·s) 병기.
+         전부 role D·비점수(neutral·normNA) — 기존 rearProp/propImpPct 점수 불변. 신키는 그 "짝"이라 같은 저속 FP1_Y 신호 사용
+         (고속 force 신호·필터 정본화는 후속 선행조건 — 규준 재발행과 세트). 방향 규약:
+           F_prop(t) = max(0, s_forward · FP1_Y(t)),  s_forward = sign(KH→FC 평균 COM 전진속도)  (미측정 시 +1 폴백)
+         원자료 관례 +FP1_Y=홈방향이라 s_forward=+1이 정상(현 데이터 COM_Velocity_Y[KH→FC] 양수). 창은 half-open, PI/KH/FC 결측·역순이면 null(0 대체 금지). */
+      var _rearProp = (function () {
+        var a = S.FP1_Y; if (!a || !a.length) return {};
+        var sf = 1; if (S.COM_Velocity_Y && _is != null && ifc != null) { var sm = 0, c = 0; for (var i = _is; i < ifc && i < S.COM_Velocity_Y.length; i++) { var v = S.COM_Velocity_Y[i]; if (isFinite(v)) { sm += v; c++; } } if (c && sm < 0) sf = -1; }
+        function fwd(x) { return isFinite(x) ? Math.max(0, sf * x) : x; }
+        function win(lo, hi) { if (lo == null || hi == null || !(hi > lo)) return { pk: null, imp: null }; var pk = null, nf = 0, s = 0; for (var i = lo; i < hi && i < a.length; i++) { var x = a[i]; if (!isFinite(x)) continue; nf++; var f = fwd(x); if (pk == null || f > pk) pk = f; s += f * dt; } return nf ? { pk: pk, imp: s } : { pk: null, imp: null }; }
+        var pk = win(_is, ikl), kf = win(ikl, ifc), pf = win(_is, ifc);
+        return { s_forward: sf,
+          peakPIKH_N: pk.pk, impPIKH_Ns: pk.imp, peakKHFC_N: kf.pk, impKHFC_Ns: kf.imp, impPIFC_Ns: pf.imp };
+      })();
+      /* [2026-08-12 연구원 의견·구현4 부분] 1.0 BW 하중수용 이벤트 + 그 시점까지의 분리 빌드업(D). ★full-foot plant(해부학적 안착)와
+         1.0 BW load(하중 사건)는 다른 사건 — 여기선 "1.0 BW load"만 산출(i_full_plant는 heel/toe 접지 gold 라벨 필요로 이연).
+         i_lead_1bw = FC~min(FC+120ms,BR)에서 FP2_Z/BW ≥ 1.0 이 ≥10ms 지속되는 첫 프레임(미도달 null). 전부 role D·비점수. */
+      var _lead1bw = (function () {
+        var z = S.FP2_Z; if (!z || ifc == null || ibr == null || !dt || bw <= 0) return {};
+        var hold = Math.max(1, Math.round(0.010 / dt)), lim = Math.min(ibr, ifc + Math.round(0.120 / dt)), i1bw = null;
+        for (var i = ifc; i <= lim && i < z.length; i++) {
+          var ok = true; for (var k = i; k < i + hold && k <= lim && k < z.length; k++) { var v = z[k]; if (!isFinite(v) || Math.abs(v) / bw < 1.0) { ok = false; break; } }
+          if (ok) { i1bw = i; break; }
+        }
+        if (i1bw == null) return { i: null };
+        var xf1bw = (_xfArr && isFinite(_xfArr[i1bw])) ? Math.abs(_xfArr[i1bw]) : null;
+        var hssKH = (_xfArr && isFinite(_xfArr[ikl])) ? Math.abs(_xfArr[ikl]) : null;
+        return { i: i1bw,
+          hssLead1BW: xf1bw == null ? null : Math.round(xf1bw * 10) / 10,
+          hssBuildKHLead1BW: (xf1bw != null && hssKH != null) ? Math.round((xf1bw - hssKH) * 10) / 10 : null,
+          fcToLead1BWMs: Math.round((i1bw - ifc) * dt * 1000) };
+      })();
       // (f) 몸통 버팀비 = 골반열림 ÷ 몸통열림(>1=골반 선행, 몸통 버팀).
       var trunkResistRatio = (pelOpenKF != null && trkOpenKF != null && trkOpenKF > 0.5) ? Math.round(pelOpenKF / trkOpenKF * 100) / 100 : null;
       // (g) FC 블로킹 입력 — 리드무릎 굴곡각·앞발 각도·뒷무릎 굴곡변화(자세가 힙힌지인지 주저앉음인지).
@@ -326,6 +409,26 @@
       var leadFootAngleFC = (t.grf_metrics && t.grf_metrics.stride_angle_deg != null && isFinite(t.grf_metrics.stride_angle_deg)) ? t.grf_metrics.stride_angle_deg : null;
       var driveKneeFlexKF = (S.Back_Knee_Angle_X && isFinite(S.Back_Knee_Angle_X[ikl]) && isFinite(S.Back_Knee_Angle_X[ifc])) ? Math.round((S.Back_Knee_Angle_X[ifc] - S.Back_Knee_Angle_X[ikl]) * 10) / 10 : null;
       var strideTime = (ikl != null && ifc != null && dt) ? (ifc - ikl) * dt : null;   // 스트라이드 소요시간(KH→FC, s)
+      /* [2026-08-12 코덱스 P1-4 착수 · 핵심 후보 3종 선행] 제동 임펄스 재정의 — 신키 leadBrakeImpulse(비점수·D).
+         기존 apBrakeImpulse(∫|FP2_Y|dt)는 제동+추진 성분 혼합(코덱스 확정). 재정의 = COM 진행방향 기준 제동 성분만:
+         F_brake(t) = max(0, sgn(v_COM_Y[FC]) · FP2_Y(t)) — V3D 원자료 관례 +FP2_Y=제동(2026-05-25 타이밍 실증 919N)에
+         진행방향 부호 정규화를 더한 것(현 데이터 COM_Velocity_Y[FC] 전원 양수라 정규화는 방어용 no-op).
+         ★비점수·규준 없음 — 잠금 코호트 검증 통과 후 승격(안건5 절차). 저속 신호 기준 — 고속 force 신호·필터 이관은
+         선행조건 잔여(규준 재산출과 세트). ★뷰어 frames의 FP 채널은 canonical 회전본이라 이 부호 검증에 쓸 수 없음
+         (65명 sweep에서 선수별 부호 혼재 실증) — 실값 검증은 원자료(V3D TXT)로. metric-v1 */
+      // ★[2026-10-11 교수 「권장대로」 · 연구원 답 #36 축 확정(Y 앞뒤 · X 좌우 · Z 수직)] 부호 규약 검증 — 확정판(v200) TXT 39세션 358시행: 뒷발판 FP1_Y 는 COM 진행 방향과 같은 부호(추진) 358/358 ·
+      //   앞발판 FP2_Y 는 반대 부호(제동) 358/358 → 힘은 「몸에 작용」(실험실 축) · 제동 성분 = max(0, −진행부호·FP2_Y). 옛 가정 「+FP2_Y=제동」(뷰어 회전본 기준)은 이 자료에서 0 으로 떨어졌었음(현장 기준 띠 p25~p75 = 0~0.04).
+      var _brakeSign = (comVelFC != null && isFinite(comVelFC) && comVelFC < 0) ? -1 : 1;   // 진행 부호(COM_Velocity_Y at FC) · 제동 = −진행부호 쪽
+      var leadBrakeImpulse = (function () {
+        var a = S.FP2_Y; if (!a || !a.length || ifc == null || ibr == null) return null;
+        var imp = integ(a.map(function (x) { return isFinite(x) ? Math.max(0, -_brakeSign * x) : x; }), ifc, ibr, dt, 0);
+        return imp == null ? null : imp / bw * 100;
+      })();
+      var leadBrakePeakN = (function () {   // 앞발 제동력 peak(방향 성분 · N) — 표시 전용(비점수 · 규준 없음)
+        var a = S.FP2_Y; if (!a || !a.length || ifc == null || ibr == null) return null;
+        var pk = null; for (var i = ifc; i <= ibr && i < a.length; i++) { var v = -_brakeSign * a[i]; if (isFinite(v) && (pk == null || v > pk)) pk = v; }
+        return pk == null ? null : Math.max(0, pk);
+      })();
       // ── [2026-06-10 §3] 에너지 흐름 결정변인 (전부 neutral · mech6 미반영) ──
       var iMerEv = (ev.i_mer != null ? ev.i_mer : ev.i_mer_erpeak);
       var leadKneeExtVel = (function () {
@@ -369,6 +472,78 @@
         return r1(mass * 9.81 * (z[ikl] - z[_is]));
       })();
       var efKappaH = null;
+      /* [2026-08-13 ①a 하체 활용 점수 엔진 · 설계 v1.2(배팅 v9 상속)] 드라이브 생성·블록 생성·블록 흡수 3독립 점수.
+         ★검증 전 전량 중립 — score:null·scoreEligible:false·qualityStatus:'unvalidated'·composite value:null(#58 표현적합성 내장·우열 라벨 없음).
+         스칼라 관절파워 *_Power_X(=Moment_Power alias·생성·전달 아님)·관절별 부호분리 후 합(합친 뒤 자르면 상쇄).
+         드라이브=Back_Hip+Back_Knee(KH→FC)·블록=Lead_Hip+Lead_Knee(FC→BR)·흡수=−blockNegJ. J/kg=실측 mass만(86 fallback 금지→null·missing_mass).
+         적격성 어댑터 detect_src: tag→stable·auto→reference_only·null/부재→unavailable. 순수 추가 데이터 — 기존 점수·표시 불변(표시·현행 인덱스 차단은 별도 ①b). */
+      var _lbu = (function () {
+        var massValid = !!(meta && isFinite(meta.weight_kg) && meta.weight_kg > 0);
+        var massKg = massValid ? meta.weight_kg : null;
+        var ds = ev.detect_src || {};
+        function q(src) { return src === 'tag' ? 'stable' : (src === 'auto' ? 'reference_only' : 'unavailable'); }
+        var driveEv = (q(ds.kl) === 'stable' && q(ds.fc) === 'stable');   // 드라이브 = kl+fc
+        var blockEv = (q(ds.fc) === 'stable' && q(ds.br) === 'stable');   // 블록 = fc+br
+        // phase당 스칼라 2채널 커버리지: finite≥95%·연속결측≤3 (NaN→0 금지)
+        function cov(ch, lo, hi) {
+          if (!ch) return 'missing_channel';
+          if (lo == null || hi == null || !(hi > lo)) return 'invalid_window';
+          var n = 0, fin = 0, run = 0, maxRun = 0;
+          for (var i = lo; i < hi && i < ch.length; i++) { n++; if (isFinite(ch[i])) { fin++; run = 0; } else { run++; if (run > maxRun) maxRun = run; } }
+          if (n === 0) return 'invalid_window';
+          if (fin / n < 0.95 || maxRun > 3) return 'insufficient_coverage';
+          return null;
+        }
+        // 관절별 부호분리 후 합(합친 뒤 자르면 상쇄 — v1.0 결함 회피). 2채널 중 하나라도 커버리지 실패 → phase work 무효(부분합 노출 금지)
+        function work(chs, lo, hi) {
+          var pos = 0, neg = 0, covReason = null;
+          for (var k = 0; k < chs.length; k++) {
+            var cr = cov(chs[k], lo, hi); if (cr) { if (!covReason) covReason = cr; continue; }
+            var p = integ(chs[k], lo, hi, dt, 1), m = integ(chs[k], lo, hi, dt, -1);
+            if (p != null) pos += p; if (m != null) neg += m;
+          }
+          return covReason ? { pos: null, neg: null, covReason: covReason } : { pos: pos, neg: neg, covReason: null };
+        }
+        var drv = work([S.Back_Hip_Power_X, S.Back_Knee_Power_X], ikl, ifc);
+        var blk = work([S.Lead_Hip_Power_X, S.Lead_Knee_Power_X], ifc, ibr);
+        function jkg(j) { return (j != null && massValid) ? Math.round(j / massKg * 100) / 100 : null; }
+        // 근위 outcome(절대크기)·경계피크 규칙(피크가 창 끝=절단 의심→unreliable)
+        function outcome(arr, lo, hi) {
+          if (!arr || lo == null || hi == null || !(hi > lo)) return { v: null, boundary: true };
+          var pk = peak(arr, lo, hi, true);
+          if (pk.v == null || pk.i == null) return { v: null, boundary: true };
+          return { v: Math.abs(pk.v), boundary: (pk.i <= lo || pk.i >= hi) };
+        }
+        var oDrive = outcome(S.Pelvis_Ang_Vel_Z, ifc, ibr);   // 드라이브 → |pelvisRotV| (FC→BR·드라이브창 KH→FC와 분리→순환 없음·전방예측)
+        var oBlock = outcome(S.Thorax_Ang_Vel_Z, ifc, ibr);   // 블록생성 → |torsoRotV| (FC→BR·동일창→windowMs 통제 필요)
+        var winMs = (ifc != null && ibr != null) ? Math.round((ibr - ifc) * dt * 1000) : null;
+        function seg(raw, covReason, evOk, outc, po) {
+          var workAvail = (raw != null && !covReason);
+          var displayElig = workAvail && evOk && massValid;   // 필요이벤트 전부 stable ∧ mass.valid
+          var primAnaElig = displayElig && !!outc && outc.v != null && !outc.boundary;
+          var reason = covReason ? covReason : (!evOk ? 'low_event_quality' : (!massValid ? 'missing_mass' : (primAnaElig ? null : 'outcome_unreliable')));
+          return {
+            rawJ: raw == null ? null : Math.round(raw * 10) / 10, jkg: jkg(raw),
+            workAvailable: workAvail, displayEligible: displayElig,
+            primaryAnalysisEligible: primAnaElig, scoreEligible: false,
+            score: null, qualityStatus: 'unvalidated', reason: reason, primaryOutcome: po || null
+          };
+        }
+        var absorptionJ = (blk.neg == null) ? null : Math.abs(blk.neg);   // −blockNegJ ≥ 0 (기존 leadHipAbsorb=Force_Power·다른 창과 무관·방향 근거 미상속)
+        var absSeg = seg(absorptionJ, blk.covReason, blockEv, null, null);
+        // 흡수 방향(흡수↑=안정?) 미확정 → primary outcome 사전고정·calibration 전 분석·점수 노출 금지
+        absSeg.primaryAnalysisEligible = false; absSeg.directionFixed = false;
+        if (!absSeg.reason || absSeg.reason === 'outcome_unreliable') absSeg.reason = 'direction_unfixed';
+        return {
+          scoreVersion: 'pitch-lbu-v1.2', massValid: massValid,
+          driveGen: seg(drv.pos, drv.covReason, driveEv, oDrive,
+            { key: 'pelvisRotVAbs', value: oDrive.v == null ? null : Math.round(oDrive.v), window: 'FC-BR', boundary: oDrive.boundary }),
+          blockGen: seg(blk.pos, blk.covReason, blockEv, oBlock,
+            { key: 'torsoRotVAbs', value: oBlock.v == null ? null : Math.round(oBlock.v), window: 'FC-BR', windowMs: winMs, boundary: oBlock.boundary }),
+          blockAbsorb: absSeg,
+          composite: { value: null, qualityStatus: 'unvalidated' }
+        };
+      })();
       return {
         strideTime: strideTime,
         propPeakTiming: propPeakTiming, impPeakRatio: (impPeakRatio == null ? null : Math.round(impPeakRatio * 1000) / 1000), comVelFC: comVelFC,
@@ -378,18 +553,29 @@
         handSepKHms: handSepKHms, earlySep: earlySep, handSepConf: handSepConf, handPostKH: handPostKH, elbowPostKH: elbowPostKH, horizAbdKH: horizAbdKH,
         merPk: absn(merPk), xfPeak: xfPeak, xfPeakFromFC: xfPeakFromFC, xfUnwindV: xfUnwindV, xfAtFC: xfAtFC, xfReleasedPctByFC: xfReleasedPctByFC, pelClose: pelClose, freeMo: freeMo, hipHinge: hipHinge, scapLoad: scapLoad, openAng: absn(openAng), leanBack: leanBack,
         rearProp: pctf(rearPropN), propImpPct: (propImp == null ? null : propImp / bw * 100), comVel: comVel, comVDrop: comVDrop, trunkLeanChange: trunkLeanChange, postureMaint: postureMaint, hipAbd: hipAbd, grfDelay: grfDelay, driveWork: driveWork,
-        leadGrf: pctf(leadGrfN), leadVGRFImpulse: leadVGRFImpulse, comDecel: comDecel, comVelReductionFCBR: comVelReductionFCBR, apBrake: pctf(leadApGrfN), apBrakeImpulse: apBrakeImpulse, leadKneeFlexionBR: r1(kBRa), kneeExtROM: kneeExtROM, kneeAbs: kneeBrace, kneeCollapse: kneeCollapse, kneeExtE: kneeExtE, kneeAbsE: kneeAbsE, comKEdrop: comKEdrop, rotKEpeak: rotKEpeak, rotKEgain: rotKEgain, linRotRatio: linRotRatio, trunkFlexV: absn(trunkFlexV), trunkLatV: absn(trunkLatV), trunkME: trunkME,
+        /* [2026-08-12 연구원 의견·구현1] 축발 추진 분리 신키 8종(전부 D·비점수) — raw(N·N·s)+정규화(%BW·%BW·s). r1 반올림, %는 /bw*100. */
+        rearPropPeakPIKH_N: r1(_rearProp.peakPIKH_N), rearPropPeakPIKH_PctBW: (_rearProp.peakPIKH_N == null ? null : r1(_rearProp.peakPIKH_N / bw * 100)),
+        rearPropImpulsePIKH_Ns: r2(_rearProp.impPIKH_Ns), rearPropImpulsePIKH_PctBWs: (_rearProp.impPIKH_Ns == null ? null : r2(_rearProp.impPIKH_Ns / bw * 100)),
+        rearPropPeakKHFC_N: r1(_rearProp.peakKHFC_N), rearPropImpulseKHFC_Ns: r2(_rearProp.impKHFC_Ns),
+        rearPropImpulsePIFC_Ns: r2(_rearProp.impPIFC_Ns), rearPropImpulsePIFC_PctBWs: (_rearProp.impPIFC_Ns == null ? null : r2(_rearProp.impPIFC_Ns / bw * 100)),
+        rearPropForwardSign: (_rearProp.s_forward == null ? null : _rearProp.s_forward),
+        /* [2026-08-12 연구원 의견·구현4 부분] 1.0 BW 하중수용 이벤트·분리 빌드업(전부 D·비점수). */
+        hssLead1BW: _lead1bw.hssLead1BW, hssBuildKHLead1BW: _lead1bw.hssBuildKHLead1BW, fcToLead1BWMs: _lead1bw.fcToLead1BWMs,
+        leadGrf: pctf(leadGrfN), leadVGRFImpulse: leadVGRFImpulse, comDecel: comDecel, comVelReductionFCBR: comVelReductionFCBR, apBrake: pctf(leadApGrfN), apBrakeImpulse: apBrakeImpulse, leadBrakeImpulse: leadBrakeImpulse, leadBrakePeak: pctf(leadBrakePeakN), leadKneeFlexionBR: r1(kBRa), kneeExtROM: kneeExtROM, kneeAbs: kneeBrace, kneeCollapse: kneeCollapse, kneeExtE: kneeExtE, kneeAbsE: kneeAbsE, comKEdrop: comKEdrop, rotKEpeak: rotKEpeak, rotKEgain: rotKEgain, linRotRatio: linRotRatio, trunkFlexV: absn(trunkFlexV), trunkLatV: absn(trunkLatV), trunkME: trunkME,
         torsoRotV: absn(torsoRotV), armRotV: absn(armRotV), humME: humME, elbowExtV: absn(elbowExtV), elbowP: absn(elbowP),
         trunkRotKE: _tSplit.rotKE, trunkFlexKE: _tSplit.flexKE, trunkLatKE: _tSplit.latKE, trunkRotShare: _tSplit.rotShare, trunkFlexShare: _tSplit.flexShare, trunkLatShare: _tSplit.latShare,
         vgrfPattern: _vgrf.pattern, vgrfTtp: _vgrf.ttp, vgrfDrop: _vgrf.drop, vgrfRetain: _vgrf.retain,
         ppKneeTrunk: ppKneeTrunk, ppTrunkHum: ppTrunkHum, ppShoElb: ppShoElb, armTransferRatio: armTransferRatio,
         shGen: shGen, elbAbs: (elbAbsR == null ? null : Math.abs(elbAbsR)), humMEt: humME,
         shForceTransfer: shForceTransfer, elForceTransfer: elForceTransfer,
-        backHipTransfer: backHipTransfer, backKneeTransfer: backKneeTransfer, leadHipTransfer: leadHipTransfer, leadKneeTransfer: leadKneeTransfer,
+        backHipTransfer: backHipTransfer, backKneeTransfer: backKneeTransfer, leadHipTransfer: leadHipTransfer, leadKneeTransfer: leadKneeTransfer, leadHipAbsorb: leadHipAbsorb,
+        backHipNet: backHipNet, backHipLoad: backHipLoad, backHipPush: backHipPush, backHipPushLin: backHipPushLin, backHipPushRot: backHipPushRot, backKneePush: backKneePush,
+        backHipPushWork: backHipPushWork, leadKneePush: leadKneePush,
         pelvisRotV: absn(pelvisRotV), kneeContribPct: kneeContribPct, kneeTrunkLag: kneeTrunkLag, kneeTransfer: kneeTransfer, driveType: driveType,
         relTimingMs: relTimingMs, armSlot: armSlot, strideLen: absn(strideLen), seqSpan: seqSpan,
         elbowMoment: elbowMomentPk, shoulderMoment: shoulderMomentPk, shoulderForce: shoulderForcePk, elbowForce: elbowForcePk, gloveShPow: gloveShPow, gloveHumME: gloveHumME,
         leadHipWork: leadHipWork, backHipMoment: backHipMoment, leadHipMoment: leadHipMoment, leadKneeMoment: leadKneeMoment, leadKneeForce: leadKneeForce, backHipWork: backHipWork,
+        lowerBodyUtil: _lbu,   /* [2026-08-13 ①a] 하체 활용 3독립점수(중립·미검증·score:null) — 표시·현행 인덱스 차단은 ①b */
         leadKneeExtVel: leadKneeExtVel, efEtaE: efEtaE, efLeadHipHinge: efLeadHipHinge, efDeltaTrunkME: efDeltaTrunkME, efDeltaHumME: efDeltaHumME, efBalanceML: efBalanceML, efStoredPE: efStoredPE, efKappaH: efKappaH
       };
     }
@@ -403,7 +589,8 @@
     })();
     var _scoreTrials = _scoreTrialsPack.trials;
     // [2026-05-31] 평균 trial 점수화 — 체리피킹 제거. 숫자 변인은 점수용 trial 평균(B), 문자열(유형 등)은 대표 trial 유지.
-    var B = (function(){ var bt=scalars(trial); var _all=_scoreTrials.map(scalars); var o={}; Object.keys(bt).forEach(function(k){ var vs=_all.map(function(z){return z&&z[k];}).filter(function(x){return typeof x==='number'&&isFinite(x);}); o[k]=vs.length?(vs.reduce(function(a,b){return a+b;},0)/vs.length):bt[k]; }); return o; })();
+    var _allScB = null;   // [2026-10-11] 투구별 스칼라(점수용 투구) — 뒷다리 → 골반 순 에너지 전달의 「투구 2/3 같은 쪽」 규칙이 쓴다(아래 _bhRule)
+    var B = (function(){ var bt=scalars(trial); var _all=_scoreTrials.map(scalars); _allScB=_all; var o={}; Object.keys(bt).forEach(function(k){ var vs=_all.map(function(z){return z&&z[k];}).filter(function(x){return typeof x==='number'&&isFinite(x);}); o[k]=vs.length?(vs.reduce(function(a,b){return a+b;},0)/vs.length):bt[k]; }); return o; })();
 
     // [2026-05-27] flying open(조기 풀림) 평가 — 주지표=FC까지 풀린 비율(xfReleasedPctByFC), 보조=풀림 시점(xfPeakFromFC).
     //   최대 분리 대비 FC 시점에 이미 풀린 비율이 클수록 착지 전 분리 누수 = flying open. 엘리트 중앙 0%·>25% 명백.
@@ -412,7 +599,7 @@
     var _foStatus = (_foPct == null) ? null : (_foPct > 25 ? '조기풀림' : (_foPct > 10 ? '경계' : '정상'));
     var _evSrc = (trial.events && trial.events.events_source) || (trial.meta && trial.meta.events_source) || null;
     var _foWarn = (!UPLIFT && _foPct != null && _foPct > 25)
-      ? ('FC 시점에 최대 분리의 ' + Math.round(_foPct) + '%가 이미 풀림 — 착지 전 조기 풀림(flying open). ' + ((B.openAng != null && B.openAng >= 15) ? 'FC 몸통 열림 ' + r1(B.openAng) + '°로도 확인됨.' : '') + (_xfFC != null && _xfFC < 0 ? ' (최대 분리 시점 FC ' + (-_xfFC) + 'ms 전)' : ''))
+      ? ('FC 시점에 최대 분리의 ' + Math.round(_foPct) + '%가 이미 풀림 — 착지 전 조기 풀림(flying open). ' + ((B.openAng != null && B.openAng >= 15) ? 'FC 몸통 열림 ' + r1(B.openAng) + '°로도 확인됨.' : '') + (_xfFC != null && _xfFC < 0 ? ' (최대 분리 시점 FC ' + r1(-_xfFC) + 'ms 전)' : ''))
       : null;
 
     // ── 가장 빠른/느린 투구 선택 (Rapsodo 구속) ──
@@ -436,23 +623,47 @@
       return { label: label, value: value, unit: unit || '', score: (score == null ? null : score), note: note || '', key: key || null, dir: dir || null, warn: warn || null };
     };
 
+    /* [2026-08-02 FIX] 선언 순서 — 아래 windup 블록이 _scRk 를 쓰므로 헬퍼를 그 위로 올린다.
+       874b1ed(와인드업 range 정합화)에서 windup 에 _scRk 가 들어왔는데 NB(var) 선언은 그 뒤에
+       있어, 재베이크 때 phases.compute 가 첫 선수에서 TypeError 로 죽었다(라이브 baked 산출물은
+       그 전에 만들어져 있어 드러나지 않았다). 로직 변경 없음 — 위치만 이동. */
+    var NB = (typeof PITCH_NORMS !== 'undefined') ? PITCH_NORMS : {};
+    function _per(k){ var n=NB[k]; return n?(Math.abs(n.p75-n.p25)/1.349||1):1; }
+    function _scN(v,k,d){ var n=NB[k]; return (v==null||!n)?null:sc(v,n.med,_per(k),d||1); }   // 방향성 점수(norm med·IQR)
+    function _scRk(v,k){ var n=NB[k]; return (v==null||!n)?null:scR(v,n.p25,n.p75); }            // 적정범위 점수(엘리트 IQR 안=최고)
+    // [2026-10-11] 방향 규칙 판정(엘리트 범위 아님) — 대표값(점수용 투구 평균)이 기준값(thr · 없으면 0 = 부호)의 어느 쪽인가 · 투구 2/3 이상이 같은 쪽일 때만 확정 · 섞이면 「판정 보류」(경계) · 투구 3구 미만 = 대표값 쪽
+    function _bhRule(key, thr){ var v=B[key], t=(thr==null?0:thr); if(v==null||!isFinite(v)) return null;
+      var vs=(_allScB||[]).map(function(z){ return z&&z[key]; }).filter(function(x){ return typeof x==='number'&&isFinite(x); });
+      if(vs.length<3) return v>t?'정상':'미흡';
+      var pos=vs.filter(function(x){ return x>t; }).length/vs.length;
+      if(v>t&&pos>=2/3) return '정상'; if(v<=t&&pos<=1/3) return '미흡'; return '판정 보류'; }
+    // [2026-10-11 교수 「진행」] 뒷고관절 일 — 푸시오프 판정 기준값(J/kg · 3축) = 공개 투수 자료(OBP 마커+힘판 100명) 선수 평균의 25백분위 0.959 — 같은 구간·같은 정의로 다시 계산.
+    //   우리 엘리트 기준을 쓰지 않는 이유: 엘리트 가운데 0.76 = OBP 15백분위(엘리트도 덜 민다). 측정계 탓 아님 — 같은 계산의 앞다리 값(앞무릎 흡수·푸시오프 일)과 뒷고관절 모멘트는 OBP 수준 ·
+    //   FC 무게중심 전진 속도도 OBP 11백분위. 재현성 ICC .90 · 뒷발 추진 몫 +.47 · FC 무게중심 속도 +.30(선수 사이) · 구속과는 약함(+.20 · OBP +.14) → 구속 약속 문구 금지.
+    var BH_PUSH_WORK_FLOOR = 0.96;
+    // [2026-10-11 교수 「권장대로」] 규칙 칸 점수화(기준값 점수) — 기준값에서 원점수(mech5 remap) 100 · 그 아래는 OBP 표준편차 1 당 15점 감점(기존 원점수 눈금과 같음).
+    //   sc 눈금 = 100 + 5z → remap(3s − 175.325) 이 100 이 되는 sc = 91.775 → sc 의 기준점 = 기준값 + 1.645·표준편차. 판정 보류면 점수 없음(충족률에서 빠지는 것과 같게).
+    //   표준편차 = OBP 100명 선수 평균 IQR ÷ 1.349(순 에너지 전달 0.797~1.516 → 0.533 · 푸시오프 일 0.959~1.680 → 0.534) · 판정(정상/미흡)은 그대로.
+    var BH_NET_SD = 0.533, BH_PUSH_WORK_SD = 0.534;
+    function _scThr(v, thr, per, st){ return (st === '판정 보류' || v == null || !isFinite(v) || !per) ? null : sc(v, thr + 1.645 * per, per, 1); }
+
     var windup = {
       key: 'windup', label: '1. 와인드업', sub: 'KH(다리들기 정점) 이전 — 드라이브 직전 회전·앞뒤 기울임(시상면) 부하 적재(코일·로딩)',
       metrics: [
         M('골반 닫힘각 (코일)', r1(B.pelClose), '°', sc(B.pelClose, 46, 34, 1), 'KH 이전 골반이 셋업 대비 횡단면으로 꼬인(닫힌) 최대 각 — 골반 코일·적재의 운동학 지표(Pelvis_Angle_Z excursion). 클수록 깊은 코일. freeMo(꼬임 토크)와 상관.', 'pelClose', 1),
         M('뒷발 지면반력 꼬임 토크', r1(B.freeMo), 'N·m', sc(B.freeMo, 12, 6, 1), 'KH 이전 최대 꼬임 토크 = 뒷발 지면반력 프리모멘트(Mz) 음의 피크 크기(꼬임=−) — 골반 코일을 만드는 역학적 동력. 클수록 적재. (양의 토크는 KH 직전 열림/드라이브 시작)', 'freeMo', 1),
-        M('힙 힌지 형성 (저장 준비)', r1(B.hipHinge), '°', sc(B.hipHinge, 26.9, 15.7, 1), 'KH 시점 축발(드라이브) 고관절 굴곡 = "뒷고관절에 앉기" = 하체 코일 적재의 가시 지표. ★적정 범위 평가(깊을수록 우수 아님): 깊이↔구속·드라이브 무관(전 슬라이스 |r|≤0.23·NS, 엘리트 11~49° 광범위)이며, 깊이가 실제로 지표하는 것은 코일(골반·몸통 감김·닫힘 r≈+0.4)뿐 — COM·X-factor는 아님. 적재 실체는 코일 변인으로 확인. 엘리트 범위 19.2~34.9°.', 'hipHinge', 'range'),
+        M('힙 힌지 형성 (저장 준비)', r1(B.hipHinge), '°', _scRk(B.hipHinge, 'hipHinge'), '니하이(KH)~앞발착지(FC) 드라이브 구간 축발 고관절 최대 굴곡 = "뒷고관절에 앉기" = 하체 코일 적재의 가시 지표. ★적정 범위 평가(깊을수록 우수 아님): 깊이↔구속·드라이브 무관(전 슬라이스 |r|≤0.23·NS, 엘리트 11~49° 광범위)이며, 깊이가 실제로 지표하는 것은 코일(골반·몸통 감김·닫힘 r≈+0.4)뿐 — COM·X-factor는 아님. 적재 실체는 코일 변인으로 확인. 엘리트 드라이브구간 범위 67.0~74.2°.', 'hipHinge', 'range'),
         // ── 회전 에너지 저장(preload) — PI~KH · 엘리트 n=20 · 평가="엘리트 범위 적합"(부족<p25 / 엘리트범위 / 높음>p75), 클수록 좋음 아님 ──
-        M('골반 닫힘각 (무릎 최고점)', r1(B.wuPelCloseKH), '°', sc(B.wuPelCloseKH, 124, 5, 1), '무릎 최고점(KH)에서 위에서 본 골반 방향 각(좌표 기준). 감긴 양과는 구분. 엘리트 범위에 가까운지로 평가.', 'wuPelCloseKH', 'range'),
-        M('골반 감긴 양 (다리 들기~무릎 최고점)', r1(B.wuPelCoil), '°', sc(B.wuPelCoil, 20.2, 9.2, 1), '다리 들기~무릎 최고점 사이 골반이 반대로 감긴 변화량 = 와인드업 동안 감은 양.', 'wuPelCoil', 'range'),
-        M('몸통 닫힘각 (무릎 최고점)', r1(B.wuTrunkCloseKH), '°', sc(B.wuTrunkCloseKH, 122, 5, 1), '무릎 최고점에서 위에서 본 몸통 방향 각.', 'wuTrunkCloseKH', 'range'),
-        M('몸통 감긴 양 (다리 들기~무릎 최고점)', r1(B.wuTrunkCoil), '°', sc(B.wuTrunkCoil, 17.8, 9.6, 1), '다리 들기~무릎 최고점 사이 몸통이 반대로 감긴 변화량.', 'wuTrunkCoil', 'range'),
-        M('골반·몸통 분리 (무릎 최고점)', r1(B.wuHSS), '°', sc(B.wuHSS, 3.0, 3.0, 1), '무릎 최고점 X-Factor(|trial.x_factor|). 착지 무렵 peak와 시점이 다름. 엘리트 범위 참고.', 'wuHSS', 'range'),
-        M('비틀림 쌓인 양 (다리 들기~무릎 최고점)', r1(B.wuHSSbuild), '°', sc(B.wuHSSbuild, 0.9, 3.0, 1), '다리 들기~무릎 최고점 사이 비틀림이 늘어난 양.', 'wuHSSbuild', 'range'),
-        M('축발 고관절 바깥 돌림 (무릎 최고점)', r1(B.wuDriveHipER), '°', sc(B.wuDriveHipER, 7.4, 4.8, 1), '무릎 최고점에서 축발(뒷발) 고관절이 바깥으로 돌아간 정도. 지나치면 힘이 샐 수 있음 → 엘리트 범위에 가까운지로 평가.', 'wuDriveHipER', 'range'),
-        M('축발 비트는 힘 (체중 대비)', (B.wuCoilTq == null ? null : Math.round(B.wuCoilTq * 1000) / 1000), 'N·m/kg', sc(B.wuCoilTq, 0.06, 0.05, 1), '다리 들기~무릎 최고점, 축발(뒷발)이 땅을 감는 방향으로 비트는 힘의 최댓값 ÷ 체중. 반대 방향 힘은 제외. 엘리트 범위에 가까운지로 평가.', 'wuCoilTq', 'range'),
-        M('골반 회전 속도 (와인드업)', r1(B.wuPelVel), '°/s', sc(B.wuPelVel, 110, 57, 1), '다리 들기~무릎 최고점, 골반이 도는 속도의 최댓값. 지나치면 급한 흔들림 가능 → 엘리트 범위에 가까운지로 평가.', 'wuPelVel', 'range'),
-        M('몸통 회전 속도 (와인드업)', r1(B.wuTrkVel), '°/s', sc(B.wuTrkVel, 89, 56, 1), '다리 들기~무릎 최고점, 몸통이 도는 속도의 최댓값. 지나치면 상체가 일찍 돌 수 있음 → 엘리트 범위에 가까운지로 평가.', 'wuTrkVel', 'range'),
+        M('골반 닫힘각 (무릎 최고점)', r1(B.wuPelCloseKH), '°', _scRk(B.wuPelCloseKH, 'wuPelCloseKH'), '무릎 최고점(KH)에서 위에서 본 골반 방향 각(좌표 기준). 감긴 양과는 구분. 엘리트 범위에 가까운지로 평가.', 'wuPelCloseKH', 'range'),
+        M('골반 감긴 양 (다리 들기~무릎 최고점)', r1(B.wuPelCoil), '°', _scRk(B.wuPelCoil, 'wuPelCoil'), '다리 들기~무릎 최고점 사이 골반이 반대로 감긴 변화량 = 와인드업 동안 감은 양.', 'wuPelCoil', 'range'),
+        M('몸통 닫힘각 (무릎 최고점)', r1(B.wuTrunkCloseKH), '°', _scRk(B.wuTrunkCloseKH, 'wuTrunkCloseKH'), '무릎 최고점에서 위에서 본 몸통 방향 각.', 'wuTrunkCloseKH', 'range'),
+        M('몸통 감긴 양 (다리 들기~무릎 최고점)', r1(B.wuTrunkCoil), '°', _scRk(B.wuTrunkCoil, 'wuTrunkCoil'), '다리 들기~무릎 최고점 사이 몸통이 반대로 감긴 변화량.', 'wuTrunkCoil', 'range'),
+        M('골반·몸통 분리 (무릎 최고점)', r1(B.wuHSS), '°', _scRk(B.wuHSS, 'wuHSS'), '무릎 최고점 X-Factor(|trial.x_factor|). 착지 무렵 peak와 시점이 다름. 엘리트 범위 참고.', 'wuHSS', 'range'),
+        M('비틀림 쌓인 양 (다리 들기~무릎 최고점)', r1(B.wuHSSbuild), '°', _scRk(B.wuHSSbuild, 'wuHSSbuild'), '다리 들기~무릎 최고점 사이 비틀림이 늘어난 양.', 'wuHSSbuild', 'range'),
+        M('축발 고관절 바깥 돌림 (무릎 최고점)', r1(B.wuDriveHipER), '°', _scRk(B.wuDriveHipER, 'wuDriveHipER'), '무릎 최고점에서 축발(뒷발) 고관절이 바깥으로 돌아간 정도. 지나치면 힘이 샐 수 있음 → 엘리트 범위에 가까운지로 평가.', 'wuDriveHipER', 'range'),
+        M('축발 비트는 힘 (체중 대비)', (B.wuCoilTq == null ? null : Math.round(B.wuCoilTq * 1000) / 1000), 'N·m/kg', _scRk(B.wuCoilTq, 'wuCoilTq'), '다리 들기~무릎 최고점, 축발(뒷발)이 땅을 감는 방향으로 비트는 힘의 최댓값 ÷ 체중. 반대 방향 힘은 제외. 엘리트 범위에 가까운지로 평가.', 'wuCoilTq', 'range'),
+        M('골반 회전 속도 (와인드업)', r1(B.wuPelVel), '°/s', _scRk(B.wuPelVel, 'wuPelVel'), '다리 들기~무릎 최고점, 골반이 도는 속도의 최댓값. 지나치면 급한 흔들림 가능 → 엘리트 범위에 가까운지로 평가.', 'wuPelVel', 'range'),
+        M('몸통 회전 속도 (와인드업)', r1(B.wuTrkVel), '°/s', _scRk(B.wuTrkVel, 'wuTrkVel'), '다리 들기~무릎 최고점, 몸통이 도는 속도의 최댓값. 지나치면 상체가 일찍 돌 수 있음 → 엘리트 범위에 가까운지로 평가.', 'wuTrkVel', 'range'),
         (function(){ var m=M('KH 어깨 Z각 (보조)', r1(B.wuShER), '°', null, (UPLIFT?'마커리스':'Theia')+' 어깨 Z축 각(무릎 최고점). ★실제 임상 어깨 외회전과 축 정의가 달라 보조 참고값. KH 팔 조기 장전 위험 신호는 손분리·팔 뒤쪽 위치로 별도 평가(개요 배지 참고).', 'wuShER', 1); m.neutral=true; return m; })(),
         (function(){ var m=M('균형 ML 변위 (start→KH)', B.efBalanceML, 'cm', null, 'COM ML 변위폭 · 와인드업 균형 context · neutral · score 미반영.', 'efBalanceML', 1); m.neutral=true; return m; })(),
         (function(){ var m=M('저장 PE (start→KH)', B.efStoredPE, 'J', null, 'm·g·ΔCOM_z 상승 · 위치에너지 저장 context · neutral.', 'efStoredPE', 1); m.neutral=true; return m; })()
@@ -462,10 +673,6 @@
     //   해석타입(itype): performance(클수록↑) / optimal(엘리트 범위 적정·과도 주의) / risk(클수록 위험) / transition(블로킹과 함께 해석).
     //   점수 반영(mech6 MAP)=propImpPct·rearProp(생성)+postureMaint·strideLen(자세·결과 optimal)+hssBuildKF(회전준비 부분). 나머지=참고·전환·위험(neutral, 화면 표시).
     //   모듈 그룹(smod): gen 전진생성 / posture 자세·COM / rot 회전준비 / fcinput FC블로킹입력.
-    var NB = (typeof PITCH_NORMS !== 'undefined') ? PITCH_NORMS : {};
-    function _per(k){ var n=NB[k]; return n?(Math.abs(n.p75-n.p25)/1.349||1):1; }
-    function _scN(v,k,d){ var n=NB[k]; return (v==null||!n)?null:sc(v,n.med,_per(k),d||1); }   // 방향성 점수(norm med·IQR)
-    function _scRk(v,k){ var n=NB[k]; return (v==null||!n)?null:scR(v,n.p25,n.p75); }            // 적정범위 점수(엘리트 IQR 안=최고)
     var _trkOpenWarn = (B.trkOpenKF!=null && NB.trkOpenKF && B.trkOpenKF > NB.trkOpenKF.p75) ? ('몸통이 KH→FC 중 '+r1(B.trkOpenKF)+'° 열림 — 엘리트 상위 범위 초과(조기 열림 주의)') : null;
     var _blkLowBrake = !!(NB.apBrakeImpulse && B.apBrakeImpulse != null && B.apBrakeImpulse < NB.apBrakeImpulse.p25);
     var _blkLowCom = !!(NB.comVelReductionFCBR && B.comVelReductionFCBR != null && B.comVelReductionFCBR < NB.comVelReductionFCBR.p25);
@@ -488,16 +695,36 @@
       metrics: [
         // ── A. 전진 에너지 생성 (얼마나 잘 밀어 전진 운동량을 만들었나) ──
         M('뒷발 추진 임펄스', r2(B.propImpPct), '%BW·s', _scN(B.propImpPct,'propImpPct',1), '∫추진력=전진 운동량 생성 · ★핵심 추진 지표(클수록 좋음) · 엘리트 중앙 '+(NB.propImpPct?NB.propImpPct.med:'–')+'%BW·s', 'propImpPct', 1),
-        M('뒷발 추진 최대힘', r1(B.rearProp), '%BW', _scN(B.rearProp,'rearProp',1), '뒷발이 홈쪽으로 미는 힘 peak · 순간 추진력(임펄스와 함께 봄) · 엘리트 중앙 '+(NB.rearProp?NB.rearProp.med:'–')+'%BW', 'rearProp', 1),
+        (function(){ var m=M('뒷발 추진 최대힘 (참고)', r1(B.rearProp), '%BW', null, '뒷발이 홈쪽으로 미는 힘 peak · 순간 추진력(임펄스와 함께 봄) · 엘리트 중앙 '+(NB.rearProp?NB.rearProp.med:'–')+'%BW · [2026-10-12 교수 「권장대로」] 참고로(드라이브 = 충격량 원칙 10-08 · 우리 엘리트 27명 구속 r +.04 · OBP +.22)', 'rearProp', 1); m.neutral=true; return m; })(),
         (function(){ var m=M('추진 peak 타이밍', r1(B.propPeakTiming), '%', null, '추진 최대힘이 KH→FC 중 발생 시점(%) · 너무 이르면 조기 소실·늦으면 FC 준비 부족 · 엘리트 중앙 '+(NB.propPeakTiming?NB.propPeakTiming.med:'–')+'%', 'propPeakTiming', 1); m.neutral=true; m.itype='optimal'; return m; })(),
         (function(){ var m=M('COM 전진속도 @FC', r2(B.comVelFC), 'm/s', null, '착지 시점 무게중심 전진속도 · 생성된 전진운동의 결과(검증 지표) · 엘리트 중앙 '+(NB.comVelFC?NB.comVelFC.med:'–')+'m/s', 'comVelFC', 1); m.neutral=true; m.itype='optimal'; return m; })(),
+        /* [2026-08-12 연구원 의견·구현1] 축발 추진 구간 분리 — 분석원 표시(전부 참고·비점수·normNA). 절대(N·N·s)와 체중 대비(%BW·%BW·s) 병기.
+           ★기존 '뒷발 추진 임펄스(%BW·s)'·'뒷발 추진 최대힘(%BW)'과 이중 가산 금지 — 같은 force curve라 점수는 기존 정규화값 1개만. */
+        (function(){ var m=M('초기 추진 최대힘 (PI→KH)', B.rearPropPeakPIKH_N, 'N', null, '다리 들기~무릎 최고점, 축발 전방(홈 방향) 지면반력 최대 · 절대값(체격 영향 포함) · 체중 대비 '+(B.rearPropPeakPIKH_PctBW==null?'–':B.rearPropPeakPIKH_PctBW+'%BW')+' · 참고(비점수)', 'rearPropPeakPIKH_N', 1); m.neutral=true; m.normNA=true; m.smod='gen'; m.pair='rearPropPeakPIKH_PctBW'; return m; })(),
+        (function(){ var m=M('초기 추진 임펄스 (PI→KH)', B.rearPropImpulsePIKH_Ns, 'N·s', null, '다리 들기~무릎 최고점 전방 추진 임펄스(∫F⁺dt) · 절대값 · 체중 대비 '+(B.rearPropImpulsePIKH_PctBWs==null?'–':B.rearPropImpulsePIKH_PctBWs+'%BW·s')+' · 참고(비점수) · ★기존 KH→FC 임펄스와 다른 구간', 'rearPropImpulsePIKH_Ns', 1); m.neutral=true; m.normNA=true; m.smod='gen'; m.pair='rearPropImpulsePIKH_PctBWs'; return m; })(),
+        (function(){ var m=M('드라이브 추진 최대힘 (KH→FC·절대)', B.rearPropPeakKHFC_N, 'N', null, '기존 「뒷발 추진 최대힘(%BW)」의 절대(N) 짝 · 체격 영향 포함 · 참고(비점수·점수는 %BW쪽)', 'rearPropPeakKHFC_N', 1); m.neutral=true; m.normNA=true; m.smod='gen'; m.pair='rearProp'; return m; })(),
+        (function(){ var m=M('드라이브 추진 임펄스 (KH→FC·절대)', B.rearPropImpulseKHFC_Ns, 'N·s', null, '기존 「뒷발 추진 임펄스(%BW·s)」의 절대(N·s) 짝 · 참고(비점수·점수는 %BW·s쪽)', 'rearPropImpulseKHFC_Ns', 1); m.neutral=true; m.normNA=true; m.smod='gen'; m.pair='propImpPct'; return m; })(),
+        (function(){ var m=M('총 추진 임펄스 (PI→FC)', B.rearPropImpulsePIFC_Ns, 'N·s', null, '전 구간 합(≈초기+드라이브) · 체중 대비 '+(B.rearPropImpulsePIFC_PctBWs==null?'–':B.rearPropImpulsePIFC_PctBWs+'%BW·s')+' · 분해 검산용 · 선수 카드 기본 숨김 · 참고(비점수)', 'rearPropImpulsePIFC_Ns', 1); m.neutral=true; m.normNA=true; m.smod='gen'; m.aux=true; return m; })(),
         (function(){ var m=M('뒷다리 고관절 내전 속도', r1(B.hipAbd), '°/s', null, '뒷다리 고관절 내전 방향 peak 각속도(IMU 직접) · 추진 보조 · 참고', 'hipAbd', 1); m.neutral=true; return m; })(),
-        (function(){ var m=M('뒷고관절 일 (KH→FC)', r1(B.backHipWork), 'J', null, '뒷고관절 양의 일 ∫P·dt=추진 동력원(고관절 단독) · 참고(마커리스 관절동역학)', 'backHipWork', 1); m.neutral=true; return m; })(),
+        (function(){ var _bh3=!!(trial&&trial.series&&trial.series.Back_Hip_Power_3AX_X); var m=M('뒷고관절 일 (KH→FC)', r1(B.backHipWork), 'J', null, _bh3?'뒷고관절 3축(신전·외전·회전) 순 파워의 양의 일 ∫P·dt=추진 동력원(고관절 단독) · 참고(마커리스 관절동역학) · 판정은 푸시오프 구간만 본 「뒷고관절 일 — 푸시오프」':'뒷고관절 양의 일 ∫P·dt=추진 동력원(고관절 단독) · 참고(마커리스 관절동역학)', 'backHipWork', 1); m.neutral=true; return m; })(),
         (function(){ var m=M('뒷다리 신전 일 (드라이브)', r1(B.driveWork), 'J', null, '뒷고관절+무릎 양의 일 · 추진력·임펄스와 중복·노이즈 → 참고', 'driveWork', 1); m.neutral=true; return m; })(),
-        M('뒷고관절 직접전달 (force power)', r1(B.backHipTransfer), 'J', _scRk(B.backHipTransfer,'backHipTransfer'), '★뒷고관절 force power(F·v) ∫dt = 지면→골반 *직접 에너지 전달*(드라이브). 생성(일=moment power)과 구분되는 전달의 실측(신 V3D 파이프라인). 적정범위 점수(엘리트 n=28 IQR · 2026-07-02 교수 coach-blind 승인).', 'backHipTransfer', 'range'),
-        M('뒷무릎 직접전달 (force power)', r1(B.backKneeTransfer), 'J', _scRk(B.backKneeTransfer,'backKneeTransfer'), '뒷무릎 force power ∫dt = 드라이브 구간 직접 에너지 전달. 적정범위 점수(엘리트 n=28).', 'backKneeTransfer', 'range'),
+        /* [2026-10-11 교수 「C · 지금 모두」] 뒷다리 에너지 흐름(방향) — 판정 = 순 에너지 전달 하나(방향 규칙 · 엘리트 범위 아님) · 로딩·푸시오프·성분·뒷무릎 = 참고.
+           옛 「관절력으로 전달된 일」 두 칸은 내려간 몫이라 판정에서 뺀다(값은 참고로 남김). 칸이 없는 옛 판 자료는 새 칸 값 없음(—). */
+        (function(){ var m=M('뒷다리 → 골반 순 에너지 전달 (KH→FC)', r2(B.backHipNet), 'J/kg', null, 'KH→FC 동안 뒷고관절을 지나 골반으로 들어온 에너지의 순 합(골반 쪽 분절 파워 적분) = 로딩(KH→뒷무릎 최대 굽힘 · 보통 − = 골반 → 뒷다리) + 푸시오프(→FC · 보통 + = 뒷다리 → 골반) · + = 뒷다리가 골반에 에너지를 더함 · − = 로딩 때 빠져나간 만큼 푸시오프로 되돌리지 못함 · 판정 = 방향(0 기준 · 투구 2/3 이상이 같은 쪽일 때 확정 · 섞이면 판정 보류) · 점수 = 기준값(0) 점수 · 크기 기준 없음', 'backHipNet', 1);
+          // [2026-10-12 교수 「권장대로」 · OBP 검토] 방향(부호) 규칙 판정 보류 → 표시만: OBP 원신호 관절력 파워 순적분(PKH→FC) 100세션 중 81 이 음수(med −0.36 J/kg) · 구속 r +.04 · 우리 엘리트 27명 13 음수 · r +.11 → 음수 = 미흡으로 볼 근거 없음 · 판정은 「뒷고관절 일 — 푸시오프」(기준값)가 맡음
+          m.neutral=true; m.role='D'; return m; })(),
+        /* [2026-10-11 교수 「진행」] 뒷고관절 일 — 푸시오프 = 크기 판정(기준값 BH_PUSH_WORK_FLOOR · 엘리트 범위 아님) · 같은 「기준값의 어느 쪽」 규칙(rule 'sign' + thr) · 과제 문구 보류(역할 정본 deferred) */
+        (function(){ var m=M('뒷고관절 일 — 푸시오프 (뒷무릎 최대 굽힘→FC)', r2(B.backHipPushWork), 'J/kg', null, '푸시오프(뒷무릎 최대 굽힘→FC) 동안 뒷고관절 근육이 만든 일(3축 관절 파워의 양(+) 적분 · 체중당) — 고관절 신전·회전으로 만든 일의 크기 · 판정 = 기준값 '+BH_PUSH_WORK_FLOOR+' J/kg 보다 크면 정상(공개 투수 자료 OBP 100명의 하위 25% 선 · 투구 2/3 이상이 같은 쪽일 때 확정 · 섞이면 판정 보류) · 점수 = 기준값 점수 · 3축 칸이 있는 자료만', 'backHipPushWork', 1);
+          var st=_bhRule('backHipPushWork', BH_PUSH_WORK_FLOOR); if(st){ m.st=st; m.rule='sign'; m.thr=BH_PUSH_WORK_FLOOR; m.scored=true; m.score=_scThr(B.backHipPushWork, BH_PUSH_WORK_FLOOR, BH_PUSH_WORK_SD, st); } return m; })(),
+        (function(){ var m=M('로딩 구간 뒷다리 → 골반 에너지 (KH→뒷무릎 최대 굽힘)', r2(B.backHipLoad), 'J/kg', null, '− = 골반에서 뒷다리로 빠져나간 에너지(로딩 · 보통 −) · 순 에너지 전달 = 로딩 + 푸시오프 · 참고', 'backHipLoad', 1); m.neutral=true; return m; })(),
+        (function(){ var m=M('푸시오프 구간 뒷다리 → 골반 에너지 (뒷무릎 최대 굽힘→FC)', r2(B.backHipPush), 'J/kg', null, '+ = 뒷다리에서 골반으로 들어온 에너지(정상 방향) · 0 이하 = 방향 결함 · 크기 판정은 「뒷고관절 일 — 푸시오프」 · 참고', 'backHipPush', 1, (B.backHipPush != null && B.backHipPush <= 0) ? '푸시오프 때 뒷다리에서 골반으로 들어온 에너지 없음 — 방향 결함' : null); m.neutral=true; return m; })(),
+        (function(){ var m=M('푸시오프 에너지 — 관절력 성분 (JFP · 병진)', r2(B.backHipPushLin), 'J/kg', null, '푸시오프 때 골반으로 들어온 에너지 중 관절력 파워(F·v) 성분 — 골반 병진(홈 쪽 전진)과 같이 감 · 참고', 'backHipPushLin', 1); m.neutral=true; return m; })(),
+        (function(){ var m=M('푸시오프 에너지 — 분절 토크 성분 (STP · 회전)', r2(B.backHipPushRot), 'J/kg', null, '푸시오프 때 골반으로 들어온 에너지 중 분절 토크 파워(M·ω) 성분 — 골반 회전 · 참고', 'backHipPushRot', 1); m.neutral=true; return m; })(),
+        (function(){ var m=M('푸시오프 구간 뒷하퇴 → 뒷대퇴 에너지 (뒷무릎 최대 굽힘→FC)', r2(B.backKneePush), 'J/kg', null, '+ = 뒷하퇴에서 뒷대퇴로 들어온 에너지(정상 방향) · 0 이하 = 방향 결함 · 크기 기준 없음 · 참고', 'backKneePush', 1, (B.backKneePush != null && B.backKneePush <= 0) ? '푸시오프 때 뒷하퇴에서 뒷대퇴로 들어온 에너지 없음 — 방향 결함' : null); m.neutral=true; return m; })(),
+        (function(){ var m=M('뒷고관절 관절력으로 전달된 일 — 골반→뒷대퇴', r1(B.backHipTransfer), 'J', null, '뒷고관절 관절력 파워(F·v)의 양(+) 적분(무릎 최고점→착지) — 골반 쪽에서 뒷대퇴 쪽으로 들어간 일(근위→원위 · J · 그 대부분이 로딩 구간) · 드라이브(원위→근위)를 잰 값이 아님 → 판정 제외(2026-10-11 · 방향 판정은 「뒷다리 → 골반 순 에너지 전달」) · 참고', 'backHipTransfer', 'range'); m.neutral=true; return m; })(),
+        (function(){ var m=M('뒷무릎 관절력으로 전달된 일 — 뒷대퇴→뒷하퇴', r1(B.backKneeTransfer), 'J', null, '뒷무릎 관절력 파워(F·v)의 양(+) 적분(무릎 최고점→착지) — 뒷대퇴 쪽에서 뒷하퇴 쪽으로 들어간 일(근위→원위 · J) · 드라이브(원위→근위)를 잰 값이 아님 → 판정 제외(2026-10-11 · 방향은 「푸시오프 구간 뒷하퇴 → 뒷대퇴 에너지」) · 참고', 'backKneeTransfer', 'range'); m.neutral=true; return m; })(),
         (function(){ var m=M('무게중심 전진 속도 (피크)', r2(B.comVel), 'm/s', null, '전진속도 peak · 추진 계열과 중복 → 참고(그룹 위치)', 'comVel', 1); m.neutral=true; return m; })(),
-        (function(){ var m=M('뒷고관절 모멘트 (결과)', r1(B.backHipMoment), 'N·m', null, '뒷고관절 모멘트 peak(3축 결과)=추진 토크 · 참고(Theia 직접)', 'backHipMoment', 1); m.neutral=true; return m; })(),
+        (function(){ var m=M('뒷고관절 모멘트 (결과)', r1(B.backHipMoment), 'N·m', null, '뒷고관절 모멘트 peak(3축 결과)=추진 토크 · 판정하지 않음 — 크기가 공개 투수 자료(OBP)와 같은 수준이고 엘리트·나머지 차이가 없으며 구속·드라이브 결과와 관계 없음(2026-10-11) · 부족한 쪽은 이 힘으로 고관절 신전·회전을 해 낸 일(「뒷고관절 일 — 푸시오프」) · 참고(Theia 직접)', 'backHipMoment', 1); m.neutral=true; return m; })(),
         // ── B. 자세·COM 관리 (낮은 자세·힙힌지를 잃지 않고 이동했나) ──
         M('자세 유지 점수', r1(B.postureMaint), '점', _scN(B.postureMaint,'postureMaint',1), '0.7·백분위(COM 낙하)+0.3·백분위(몸통 전경변화) 가중합(0~100) · 낮은 자세·전경 유지 · [2026-06-22] 단조(클수록↑)로 수정 — 구속 r=.31·상한 페널티 데이터 미지지(기존 적정범위=pos↔st 모순). 성능·안전 이중성(과도 전경↔elbow varus)은 분해검증 백로그 · 엘리트 범위 '+(NB.postureMaint?NB.postureMaint.p25+'~'+NB.postureMaint.p75:'–'), 'postureMaint', 1),
         (function(){ var m=M('COM 수직 낙하 (KH→FC)', r1(B.comVDrop), 'cm', null, '무게중심 낙하량=낮은 자세 유지(자세 유지 점수 주성분 0.7) · 적정 범위(과도 시 무너짐) · 엘리트 범위 '+(NB.comVDrop?NB.comVDrop.p25+'~'+NB.comVDrop.p75+'cm':'–'), 'comVDrop', 1); m.neutral=true; m.itype='optimal'; return m; })(),
@@ -505,14 +732,18 @@
         (function(){ var m=M('뒷무릎 굴곡 변화 (KH→FC)', r1(B.driveKneeFlexKF), '°', null, '낮은 자세가 고관절 힌지인지 주저앉음인지 구분 · +면 더 굽음 · 참고', 'driveKneeFlexKF', 1); m.neutral=true; m.itype='optimal'; return m; })(),
         (function(){ var m=M('드라이브 시간 (KH→FC)', r2(B.strideTime), 's', null, '드라이브 소요시간 · 빠른 템포형은 짧아도 정상(적정 범위) · 엘리트 중앙 '+(NB.strideTime?NB.strideTime.med:'–')+'s', 'strideTime', 1); m.neutral=true; m.itype='optimal'; return m; })(),
         // ── C. 회전 준비 (와인드업 preload가 회전 준비로 이어졌나) ──
-        M('분리 빌드업 (KH→FC)', r1(B.hssBuildKF), '°', _scN(B.hssBuildKF,'hssBuildKF',1), 'FC−KH X-Factor 분리 발달량 · 회전 전달 사전조건 · 엘리트 중앙 '+(NB.hssBuildKF?NB.hssBuildKF.med:'–')+'°', 'hssBuildKF', 1),
+        (function(){ var m=M('분리 빌드업 (KH→FC · 참고)', r1(B.hssBuildKF), '°', null, 'FC−KH X-Factor 분리 발달량 · 엘리트 중앙 '+(NB.hssBuildKF?NB.hssBuildKF.med:'–')+'° · [2026-10-12 교수 「권장대로」 · OBP 검토] 「클수록 좋음」 점수 해제 → 참고: 우리 엘리트 27명 구속 r −.14 · 분리 수준(FC·최대)도 −.09~−.12 · OBP 는 착지 시 분리 수준만 +.32', 'hssBuildKF', 1); m.neutral=true; return m; })(),
+        /* [2026-08-12 연구원 의견·구현4 부분] KH→1.0 BW 하중수용 시점까지의 분리 빌드업(대안 지표·참고·비점수). ★기존 KH→FC(hssBuildKF)와 나란히 비교·대체 아님.
+           full-foot plant(해부학적 안착) 시점 지표는 heel/toe 접지 gold 라벨 검증 후 추가 예정(이연). */
+        (function(){ var m=M('분리 빌드업 (KH→1.0BW 하중)', r1(B.hssBuildKHLead1BW), '°', null, '앞발 수직힘이 체중(1.0 BW)에 처음 도달한 시점의 |X-Factor| − KH |X-Factor| · KH→FC의 대안 창(하중수용 기준) · 참고(비점수) · 미도달 시 값 없음', 'hssBuildKHLead1BW', 1); m.neutral=true; m.normNA=true; m.smod='rot'; return m; })(),
+        (function(){ var m=M('1.0BW 하중 도달 시간 (FC→)', B.fcToLead1BWMs, 'ms', null, '착지 후 앞발 수직힘이 체중에 도달하기까지 시간 · 하중수용 속도 맥락 · 참고(비점수) · ★full-foot plant(안착)와 다른 하중 사건', 'fcToLead1BWMs', 1); m.neutral=true; m.normNA=true; m.smod='rot'; return m; })(),
         (function(){ var m=M('골반 열림 (KH→FC)', r1(B.pelOpenKF), '°', null, '골반 횡단면 회전 시작량 · 회전 생성 시작 · 전환 준비 변인 · 엘리트 중앙 '+(NB.pelOpenKF?NB.pelOpenKF.med:'–')+'°', 'pelOpenKF', 1); m.neutral=true; m.itype='transition'; return m; })(),
-        (function(){ var m=M('몸통 열림 (KH→FC)', r1(B.trkOpenKF), '°', _scN(B.trkOpenKF,'trkOpenKF',-1), '몸통 횡단면 회전량 · ★클수록 위험(조기 열림 = flying open → 몸통-팔 전달 상한↓) · [2026-07-03] 점수화(dir=-1·조기열림 감점·엘리트 상위 '+(NB.trkOpenKF?NB.trkOpenKF.p75:'–')+'° 초과 주의). Uplift flying_open 정합 · kneeCollapse 페널티와 독립(중복 아님).', 'trkOpenKF', -1, _trkOpenWarn); m.itype='risk'; return m; })(),
+        (function(){ var m=M('몸통 열림 (KH→FC · 참고)', r1(B.trkOpenKF), '°', null, '몸통 횡단면 회전량 · [2026-10-12 교수 「권장대로」 · OBP 검토] 「클수록 위험」 점수(07-03 · dir=-1) 해제 → 참고: 우리 엘리트 27명 구속 r +.35(열릴수록 빠름) · OBP 착지 시 몸통 회전 −.04 → 방향 근거 없음 · 엘리트 중앙 '+(NB.trkOpenKF?NB.trkOpenKF.med:'–')+'°', 'trkOpenKF', 0); m.neutral=true; return m; })(),
         (function(){ var m=M('몸통 버팀비 (골반÷몸통 열림)', r2(B.trunkResistRatio), '비', null, '골반은 열리고 몸통은 버티는지 · >1=골반 선행(중심부=근위 먼저 양호) · 엘리트 중앙 '+(NB.trunkResistRatio?NB.trunkResistRatio.med:'–'), 'trunkResistRatio', 1); m.neutral=true; m.itype='transition'; return m; })(),
         // ── D. 착지(FC) 블로킹 입력 조건 (드라이브 결과 = 블로킹 입력값) ──
-        M('보폭 (키%)', r1(B.strideLen), '%', _scRk(B.strideLen,'strideLen'), '앞발 착지 거리 ÷ 신장 · ★적정 범위(너무 짧으면 전진 부족·너무 길면 FC 무너짐) · 엘리트 범위 '+(NB.strideLen?NB.strideLen.p25+'~'+NB.strideLen.p75+'%':'–')+'(중앙 '+(NB.strideLen?NB.strideLen.med:'–')+'%)', 'strideLen', 1),
+        M('보폭 (키%)', r1(B.strideLen), '%', _scRk(B.strideLen,'strideLen'), '★[2026-08-12 명문화] FC(앞발 최초 접촉) 시점 양 발끝(L_TOE·R_TOE)의 지면 수평거리 ÷ 신장. FC는 이벤트 태그 우선, 누락 시 앞발 수직힘 10N 최초 도달로 검출(발끝 좌표 없으면 CoP→STRIDE_LENGTH_X 폴백). ‘완전 안착’이나 ‘1.0BW 도달’ 시점 아님 · 적정 범위(너무 짧으면 전진 부족·너무 길면 FC 무너짐) · 엘리트 범위 '+(NB.strideLen?NB.strideLen.p25+'~'+NB.strideLen.p75+'%':'–')+'(중앙 '+(NB.strideLen?NB.strideLen.med:'–')+'%)', 'strideLen', 1),
         (function(){ var m=M('FC 리드무릎 굴곡', r1(B.leadKneeFlexFC), '°', null, '착지 시 앞무릎 굽힘 · 블로킹 준비자세 · 너무 펴지면 흡수 부족·너무 굽으면 무너짐(적정 범위) · 엘리트 범위 '+(NB.leadKneeFlexFC?NB.leadKneeFlexFC.p25+'~'+NB.leadKneeFlexFC.p75+'°':'–'), 'leadKneeFlexFC', 1); m.neutral=true; m.itype='optimal'; m.smod='fcinput'; return m; })(),
-        (function(){ var m=M('FC 앞발 방향', r1(B.leadFootAngleFC), '°', null, '착지 앞발 방향(코치=방향 라벨+크기 · analyst=signed+라벨) · signed norm band는 research 보류 · 리드레그 제동 입력', 'leadFootAngleFC', 1); m.neutral=true; m.itype='transition'; m.smod='fcinput'; m.normNA=true; return m; })(),
+        (function(){ var m=M('스트라이드 선 방향 (참고)', r1(B.leadFootAngleFC), '°', null, '★[2026-08-12 정정] 이 값은 앞발 heel→toe 방향이 아니라 뒷발 CoP→앞발 CoP 선(스트라이드 선) 방향(FC→BR) · 앞발 방향 연구의 독립변수가 아니므로 밴드·판정은 이미 제거됨 · 손잡이 정규화·target-line 기준의 앞발 방향 v2(heel→toe)는 발끝 마커 채널·OBP crosswalk 검증 후 별키로 추가 예정(이연) · ★부상 위험 표시 금지 — 부하 맥락 후보로만', 'leadFootAngleFC', 1); m.neutral=true; m.itype='transition'; m.smod='fcinput'; m.normNA=true; m.aka='strideLineAngle'; return m; })(),
         (function(){ var m=M('골반·몸통 분리 @FC', r1(B.hssFC), '°', null, 'FC 시점 |X-Factor|=블로킹 직전 회전 preload · 전환 핵심 · 엘리트 중앙 '+(NB.hssFC?NB.hssFC.med:'–')+'°', 'hssFC', 1); m.neutral=true; m.itype='transition'; m.smod='fcinput'; return m; })()
       ]
     };
@@ -532,7 +763,9 @@
       key: 'blocking', label: '3. 블로킹 (착지·제동)', sub: '전진 에너지 제동 · COM 제어 · 앞다리 지지 · 앞무릎 전략/위험 분리',
       metrics: [
         (function(){ var m=M('블로킹 유형', _blkType ? _blkType.easy : null, '', null, '앞무릎 신전량·무너짐 정도·제동 임펄스·전진속도 감소를 함께 본 전략 분류. 우열 점수가 아니라 해석 라벨. 전달 효율은 이 유형(ROM)이 아니라 ‘앞무릎 신전속도’가 가름(34명 검증 r≈.55) — 유형=서술 라벨.', 'blockingType', null); m.neutral=true; return m; })(),
-        M('제동 임펄스 (FC→BR)', r2(B.apBrakeImpulse), '%BW·s', _scN(B.apBrakeImpulse,'apBrakeImpulse',1), '앞발 AP 제동력의 시간 누적량(∫|FP2_Y|dt/BW). peak보다 실제 전진 에너지를 얼마나 충분히 멈췄는지에 가까운 핵심 score 변인.', 'apBrakeImpulse', 1),
+        M('제동 임펄스 (FC→BR)', r2(B.apBrakeImpulse), '%BW·s', _scN(B.apBrakeImpulse,'apBrakeImpulse',1), '앞발 AP 제동력의 시간 누적량(∫|FP2_Y|dt/BW) · peak보다 실제 전진 에너지를 얼마나 충분히 멈췄는지에 가까운 핵심 score 변인 ★정의 주의(2026-08-12 코덱스 확정): 절대값 적분이라 제동+추진 성분이 섞임 — 방향 성분만의 재정의판(아래 "제동 임펄스(재정의)")을 병기 · 점수 제외 여부는 역할 개편(안건1)과 함께 결정·규준 스케일 유지 위해 현행 산출 불변', 'apBrakeImpulse', 1),
+        (function(){ var m=M('제동 임펄스 (재정의·방향 성분)', r2(B.leadBrakeImpulse), '%BW·s', null, '진행방향 반대(제동) 성분만 적분한 재정의 임펄스 — F_brake=max(0, −진행부호·FP2_Y), FC→릴리스, 체중 정규화(코덱스 P1-4·2026-08-12 착수 · ★부호 규약 2026-10-11 확정판 TXT 358시행으로 확정 — 제동 = 진행 방향의 반대 부호). 기존 "제동 임펄스"(절대값 적분)의 교정판. ★비점수·규준 없음 — 잠금 코호트 검증 후 승격 예정(핵심 후보 3종 선행). 저속 신호 기준·고속 이관은 후속.', 'leadBrakeImpulse', 1); m.neutral=true; m.role='D'; m.normNA=true; return m; })(),
+        (function(){ var m=M('앞발 제동력 peak (방향 성분)', r1(B.leadBrakePeak), '%BW', null, '진행 방향 반대(제동) 성분의 최댓값(FC→릴리스 · 체중 대비) — 2026-10-11 부호 규약 확정 뒤 표시 전용으로 연 칸(교수 「권장대로」 · 연구원 답 #36). 기존 "앞발 AP 제동력 peak (deprecated)"(부호 미정 · 옛 규준 스케일)의 교정판 · ★비점수·규준 없음.', 'leadBrakePeak', 1); m.neutral=true; m.role='D'; m.normNA=true; return m; })(),
         M('전진속도 감소량 (FC→BR)', r2(B.comVelReductionFCBR), 'm/s', _scN(B.comVelReductionFCBR,'comVelReductionFCBR',1), '착지 후 공 릴리스까지 COM 전진속도가 줄어든 양. 낮으면 앞다리에서 전진 에너지가 충분히 멈추지 못하고 몸이 계속 앞으로 밀리는 패턴.', 'comVelReductionFCBR', 1),
         (function(){ var m=M('바닥 힘 후기 유지율', (B.vgrfDrop==null?null:r1(100-B.vgrfDrop)), '%', null, '앞발 수직 지면반력이 정점 후 릴리스까지 얼마나 유지됐나(100−후기 최대 감소율). ★[2026-06-21] 릴리스 단일프레임이라 i_br 흔들림·빠른신전형(앞다리 일찍 펴고 볼팅)을 약점 오판 → 채점 제외(context), 블로킹 강도는 임펄스로. 패턴 표시만. 정점 도달 ' + (B.vgrfTtp==null?'–':B.vgrfTtp+'%') + '·후기 감소 ' + (B.vgrfDrop==null?'–':B.vgrfDrop+'%'), 'vgrfRetain', 1); m.neutral=true; return m; })(),
         M('앞발 수직 지지 임펄스', r2(B.leadVGRFImpulse), '%BW·s', _scN(B.leadVGRFImpulse,'leadVGRFImpulse',1), '앞발 수직 지지력의 시간 누적(∫). ★[2026-06-21] 블로킹 강도의 생체역학 정론 — 릴리스 단일프레임(vgrfRetain) 대신 본 임펄스를 채점(코치검증 재검토). 단 GRF=구속 강예측이라 약점은 블록유형과 함께 해석.', 'leadVGRFImpulse', 1),
@@ -543,27 +776,34 @@
         (function(){ var m=M('BR 리드무릎 굴곡각', r1(B.leadKneeFlexionBR), '°', null, '공 릴리스 시점 앞무릎 굴곡각. FC 굴곡각·신전 ROM과 함께 앞무릎 전략 분류에 사용.', 'leadKneeFlexionBR', 1); m.neutral=true; return m; })(),
         (function(){ var m=M('앞무릎 굴곡 무너짐 정도 (risk)', r1(B.kneeCollapse), '°', null, '착지 후 FC 대비 무릎이 추가로 굽은 최대량. 단독 score 평균이 아니라 제동 임펄스/전진속도 감소 부족과 함께 나타날 때 Collapse / Leakage risk 및 penalty로 처리.', 'kneeCollapse', -1, _blkRiskWarn); m.neutral=true; return m; })(),
         (function(){ var m=M('블로킹 위험 penalty', _blkPenalty, '점', null, 'kneeCollapse가 엘리트 p75 초과이고 제동 임펄스 또는 전진속도 감소가 p25 미만이면 10~15점 감점. 일반 score 평균 변인이 아니라 조건부 risk penalty.', 'blockRiskPenalty', -1); m.neutral=true; return m; })(),
-        (function(){ var m=M('앞무릎 버팀 모멘트 (context)', r1(B.kneeAbs), 'N·m', null, '앞무릎이 굴곡 부하에 저항하며 받는 편심 버팀 모멘트 peak. 마커리스 역동역학 추정이므로 score보다 context.', 'kneeAbs', 1); m.neutral=true; return m; })(),
-        (function(){ var m=M('앞무릎 흡수 에너지 (context)', r1(B.kneeAbsE), 'J', null, '앞무릎 음의 파워 적분 크기. 흡수 적음=항상 좋음으로 단정하지 않고 버팀 지속성·collapse와 함께 해석.', 'kneeAbsE', -1); m.neutral=true; return m; })(),
+        (function(){ var m=M('앞무릎 버팀 모멘트 (context)', r1(B.kneeAbs), 'N·m', null, '앞무릎이 굴곡 부하에 저항하며 받는 편심 버팀 모멘트 peak · 마커리스 역동역학 추정이므로 score보다 context', 'kneeAbs', 1); m.neutral=true; return m; })(),
+        (function(){ var m=M('앞무릎 흡수 에너지 — X축(굴곡·신전) 성분 (context)', r1(B.kneeAbsE), 'J', null, '앞무릎 음의 파워 적분 크기. 흡수 적음=항상 좋음으로 단정하지 않고 버팀 지속성·collapse와 함께 해석.', 'kneeAbsE', -1); m.neutral=true; return m; })(),
         (function(){ var m=M('앞다리 버팀 겹침률 (SSOT)', (B.kneeTransfer==null?null:r1(B.kneeTransfer*100)), '%', null, '[K5-A SSOT] VGRF×골반 각가속 overlap %. score 미반영 · etdiag 종합점수(5요소)와 정의 상이 → legacy/research만.', 'kneeTransfer', 1); m.neutral=true; return m; })(),
-        (function(){ var m=M('COM 운동에너지 감소량 (블록)', r1(B.comKEdrop), 'J', null, '블록이 제거한 COM 선형 운동에너지 ½m(v_peak²−v_min²)=제동된 전진 에너지. ★"회전으로 전환"은 추론이라 점수에서 빼고 참고로만 — 실제 회전 전환은 아래 직접 측정(회전 KE 증가·전달비) 참조.', 'comKEdrop', 1); m.neutral=true; return m; })(),
+        (function(){ var m=M('COM 운동에너지 감소량 (블록)', r1(B.comKEdrop), 'J', null, '무릎 최고점~릴리스 구간 몸 중심(COM) 전진 속도 최고점 뒤 최저점까지 줄어든 운동에너지 ½m(v_peak²−v_min²) — 전진 운동에너지 감소 관찰값(앞다리 몫만 따로 나눈 값 아님 · 착지 기준 값 아님) · 이 에너지가 회전으로 바뀌었다는 뜻은 아님(회전 운동에너지 증가는 따로 잼) · 점수에는 쓰지 않는 참고값', 'comKEdrop', 1); m.neutral=true; return m; })(),
         // [2026-06-10 4b] Uplift(GRF 없음)는 블로킹 score 변인 3종(apBrake·vgrf·leadVGRF)이 비어 → 키네마틱 전환 변인으로 score 부여.
         //   Theia(UPLIFT=false)는 기존 그대로 neutral(참고) → Theia 점수 diff=0 보장. Uplift만 score 집계.
-        (function(){ var m=M('회전 KE 증가 (골반+몸통)', r1(B.rotKEgain), 'J', UPLIFT?_scN(B.rotKEgain,'rotKEgain',1):null, '직접 산출: 착지(FC)→피크 사이 골반+몸통 회전 운동에너지(½Iω², de Leva)의 증가분. 제동된 선형 에너지가 실제 몸 회전으로 얼마나 나타났는지. 검증(34명): 노이즈 커 점수 아닌 참고. 분위수 19/39/46J.', 'rotKEgain', 1); m.neutral=!UPLIFT; return m; })(),
-        (function(){ var m=M('선형→회전 전달비', (B.linRotRatio==null?null:r1(B.linRotRatio)), '%', UPLIFT?_scN(B.linRotRatio,'linRotRatio',1):null, '회전 KE 증가 ÷ 선형 KE 손실 ×100 = 제동된 전진 에너지 중 순 회전 KE 증가로 나타난 비율. 그룹 중앙 ~17%(나머지는 앞다리 편심 흡수·재분배·근육 능동생성). 효율이 아닌 기술 참고 지표. 분위수 9/17/24%.', 'linRotRatio', 1); m.neutral=!UPLIFT; return m; })(),
-        (function(){ var m=M('전환 효율 η_E', B.efEtaE, '', null, 'ΔKE_회전 / |ΔKE_COM,fwd| (FC→BR). low-confidence · 결과지(원인 아님) · context · score 미반영 · n=34 파일럿.', 'efEtaE', 'range'); m.neutral=true; m.lowConfidence=true; return m; })(),
+        (function(){ var m=M('회전 KE 증가 (골반+몸통)', r1(B.rotKEgain), 'J', UPLIFT?_scN(B.rotKEgain,'rotKEgain',1):null, '착지 뒤 골반+몸통 회전 운동에너지(½Iω², de Leva)가 늘어난 양 — 전진 에너지 감소와 함께 보는 관찰값이며, 그 에너지가 회전으로 바뀐 양이라는 뜻은 아님 · 잡음이 커 점수가 아닌 참고(분위수 19/39/46 J)', 'rotKEgain', 1); m.neutral=!UPLIFT; return m; })(),
+        (function(){ var m=M('전진→회전 운동에너지 변화비', (B.linRotRatio==null?null:r1(B.linRotRatio)), '%', UPLIFT?_scN(B.linRotRatio,'linRotRatio',1):null, '회전 운동에너지 증가(착지→최고점) ÷ 전진 운동에너지 감소(무릎 최고점~릴리스) ×100 — 구간이 다른 두 양의 비율 · 덜 멈출수록(분모가 작을수록) 커질 수 있어 높을수록 좋은 값이 아니며, 전환된 비율이나 효율이 아님 · 참고값(목표 아님 · 분위수 9/17/24%)', 'linRotRatio', 1); m.neutral=!UPLIFT; return m; })(),
+        (function(){ var m=M('전환 효율 η_E', B.efEtaE, '', null, '변화비 ÷ 100 — 회전 운동에너지 증가(착지→최고점) ÷ 전진 운동에너지 최대 감소(무릎 최고점~릴리스) · 1을 넘을 수 있고 효율 아님(이름의 「효율」은 옛 표현) · 참고 · 점수 미반영 · 34명 자료 기준', 'efEtaE', 'range'); m.neutral=true; m.lowConfidence=true; return m; })(),
         M('앞무릎 신전속도 peak', B.leadKneeExtVel, '°/s', _scN(B.leadKneeExtVel, 'leadKneeVelPk', 1), 'FC→BR Lead_Knee_Ang_Vel_X 신전방향 peak. 블로킹→몸통 회전 전달 효율 지표(34명 검증 r≈.55·유형 무관 공통·비중복) → 점수화. [2026-06-14]', 'leadKneeVelPk', 1),
+        M('앞무릎 버팀량 (FC→BR 신전 · 회전 조직화)', B.kneeExtROM==null?null:r1(B.kneeExtROM), '°', _scRk(B.kneeExtROM,'kneeExtROM'), '착지→릴리스 앞무릎 순 신전(버팀량, =kneeExtROM). ★[2026-07-11 OBP within 검증→채점 승격] 버팀→몸통 회전속도 within +0.33(전체 최강 선수내 고리·GRF 통제 후 +0.30·partial +0.29 독립) = 지면반력을 회전으로 넘기는 관문. ★적정범위(range) 채점: 유형(신전-vault/버팀-흡수) 유효성 존중 — 낮음=결함 아닌 전략, 엘리트 IQR(2.4~22.7°) 밖 극단만 감점(방향채점 아님). 구속 직접효과는 작음(<1mph·회전 조직화 근거)이라 range로 신중 편입. ★재베이크·velo 검증 게이트(라이브 점수 반영=재베이크 시).', 'kneeExtROM', 'range'),
+        (function(){ var m=M('앞무릎 신전 일 (앞무릎 최대 굽힘→BR)', r2(B.leadKneePush), 'J/kg', null, '앞무릎 최대 굽힘→BR 동안 앞무릎 신전으로 만든 일(굴곡·신전(X) 파워의 양(+) 적분 · 체중당) · 이 구간 전진속도 감소·몸통 회전 속도와 같이 커짐 · 판정은 같은 요인(상관 높음)인 앞무릎 신전속도·버팀량이 함 · 참고', 'leadKneePush', 1); m.neutral=true; return m; })(),
         (function(){ var m=M('앞고관절 hinge (FC→MER)', B.efLeadHipHinge, '°', null, 'Lead_Hip_Angle_X[MER]−[FC]. 전환 자세 context · neutral.', 'efLeadHipHinge', 1); m.neutral=true; return m; })(),
         (function(){ var m=M('운동량계수 κ_H', B.efKappaH, '', null, '앞뒤면(시상면) H 기반 전환계수 — 채널 미연결 · 데이터 축적 중 · low-confidence · neutral.', 'efKappaH', 'range'); m.neutral=true; m.lowConfidence=true; return m; })(),
         // [2026-05-26] 신 Theia 직접 하지 키네틱(블록). 기준은 엘리트 그룹로 산출(BIOMOTION_NORMS 교체 후 z 표시). 엘리트 변별 큼(앞고관절 일 9 vs 39J 등).
         (function(){ var m=M('앞고관절 일 (context)', r1(B.leadHipWork), 'J', null, '블록 구간 앞고관절 양의 일. 앞다리 능동 활용 context이나 마커리스 역동역학 추정.', 'leadHipWork', 1); m.neutral=true; return m; })(),
-        M('앞고관절 직접전달 (force power)', r1(B.leadHipTransfer), 'J', _scRk(B.leadHipTransfer,'leadHipTransfer'), '★앞고관절 force power(F·v) ∫dt = 블록→골반회전 *직접 에너지 전달*. 생성(일=moment power)과 구분되는 전달의 실측(신 V3D 파이프라인). 적정범위 점수(엘리트 n=28).', 'leadHipTransfer', 'range'),
-        M('앞무릎 직접전달 (force power)', r1(B.leadKneeTransfer), 'J', _scRk(B.leadKneeTransfer,'leadKneeTransfer'), '앞무릎 force power ∫dt = 블록 구간 직접 에너지 전달. 적정범위 점수(엘리트 n=28).', 'leadKneeTransfer', 'range'),
+        /* [2026-10-11 교수 「진행」] 앞다리 옛 「관절력으로 전달된 일」 두 칸 = 판정 제외(값은 참고) — 위에서 아래로 내려간 몫이라 브레이크(FC→앞무릎 최대 굽힘) 흡수와 같은 묶음(선수 사이 ρ −.37~−.63) ·
+           구속(+.07/−.10)·전진속도 감소(+.18/+.03)·몸통 회전 속도(0)와 관계 없음(체중당 · 코호트 38명). 뒷다리 두 칸과 같은 처리 · mech5/mech6 블로킹 점수 목록에서도 뺌. */
+        (function(){ var m=M('앞고관절 관절력으로 전달된 일 — 골반→앞대퇴', r1(B.leadHipTransfer), 'J', null, '앞고관절 관절력 파워(F·v)의 양(+) 적분(착지→릴리스) — 골반 쪽에서 앞대퇴 쪽으로 들어간 일(J) · 앞다리에서 골반으로 올라가는 전달을 잰 값이 아님 · 반대 방향 몫과 관절 토크 파워는 이 값에 들어 있지 않음 · 판정 제외(2026-10-11 · 브레이크 흡수와 같은 요인(상관 높음) · 구속·전진속도 감소·몸통 회전과 관계 없음) · 참고', 'leadHipTransfer', 'range'); m.neutral=true; return m; })(),
+        (function(){ var m=M('앞무릎 관절력으로 전달된 일 — 앞대퇴→앞하퇴', r1(B.leadKneeTransfer), 'J', null, '앞무릎 관절력 파워(F·v)의 양(+) 적분(착지→릴리스) — 앞대퇴 쪽에서 앞하퇴 쪽으로 들어간 일(J) · 아래에서 위로 올라가는 전달을 잰 값이 아님 · 반대 방향 몫과 관절 토크 파워는 이 값에 들어 있지 않음 · 판정 제외(2026-10-11 · 브레이크 흡수와 같은 요인(상관 높음) · 구속·전진속도 감소·몸통 회전과 관계 없음 — 버티기·신전 판정은 앞무릎 신전속도·버팀량) · 참고', 'leadKneeTransfer', 'range'); m.neutral=true; return m; })(),
+        (function(){ var m=M('앞고관절 관절력으로 전달된 일 — 앞대퇴→골반', r1(B.leadHipAbsorb), 'J', null, '앞고관절 관절력 파워(F·v)의 음(−) 부분 적분 크기(착지 직전~릴리스) — 앞대퇴 쪽에서 골반 쪽으로 관절력을 통해 들어간 일(J) · 관절이 에너지를 「흡수」한 양이 아니며, 클수록 단단한 블로킹이라는 뜻도 아님 · 우리 마커리스 89명에서 구속과 r=+.43 · 참고(무채점·밴드=엘리트28 중앙 '+(NB.leadHipAbsorb?NB.leadHipAbsorb.med:'–')+'J · 2026-08-12 수동 발행).', 'leadHipAbsorb', 1); m.neutral=true; return m; })(),
+        (function(){ // [2026-07-11] leadKneeTransfer 「저전달 잔차」 진단 플래그 → [2026-10-11 교수 「진행」] 쓰지 않음(값 없음): 기준 칸이 브레이크 때 내려간 몫이라 「전달 누수」로 읽을 근거가 없음.
+          var m=M('앞무릎 전달 잔차 (상류 통제·진단)', null, '', null, '쓰지 않음(2026-10-11) — 기준 칸 「앞무릎 관절력으로 전달된 일」이 근위→원위로 들어간 일(브레이크 흡수와 같은 요인)이라 「전달 누수」 진단 근거가 없어 판정에서 뺌 · 버티기·신전은 앞무릎 신전속도·버팀량으로 봄', 'leadKneeTransferResid', 1); m.neutral=true; return m; })(),
         (function(){ var m=M('앞고관절 모멘트 (research)', r1(B.leadHipMoment), 'N·m', null, '앞고관절 모멘트 peak. research_only/debug 성격.', 'leadHipMoment', 1); m.neutral=true; return m; })(),
         (function(){ var m=M('앞무릎 모멘트 (research)', r1(B.leadKneeMoment), 'N·m', null, '앞무릎 모멘트 peak. research_only/debug 성격이며 kneeAbs와 중복 가능.', 'leadKneeMoment', 1); m.neutral=true; return m; })(),
-        (function(){ var m=M('앞무릎 관절력 (부하)', r1(B.leadKneeForce), 'N', null, '앞무릎 관절 반력 peak. 성능 score보다 부하 맥락(단독 우열 아님).', 'leadKneeForce', 1); m.neutral=true; return m; })(),
+        (function(){ var m=M('앞무릎 관절력 (부하)', r1(B.leadKneeForce), 'N', null, '앞무릎 관절 반력 peak · 성능 score보다 부하 맥락(단독 우열 아님)', 'leadKneeForce', 1); m.neutral=true; return m; })(),
         (function(){ var _pat=(B.vgrfTtp==null||B.vgrfDrop==null)?B.vgrfPattern:((B.vgrfTtp>=65&&B.vgrfDrop<=25)?'증가형':((B.vgrfTtp<=40&&B.vgrfDrop>=45)?'감소형':'유지형')); var m=M('바닥 미는 힘 유지 패턴', _pat, '', null, '앞발 수직 지면반력의 시간 패턴: 증가형(릴리스까지 유지·상승)·유지형(plateau)·감소형(조기 정점 후 급감). 무릎 각도유형과 별개 차원 — 각도가 버텨도 GRF가 조기 감소하면 후기 지지 약화. 그룹 34명에서 유지형이 구속·회전 최고.', 'vgrfPattern', null); m.neutral=true; return m; })(),
-        (function(){ var be=null; if(B.torsoRotV!=null&&B.apBrake!=null){ var pred=837+19.6*B.apBrake; var resid=B.torsoRotV-pred; be=Math.max(10,Math.min(100,Math.round(50+resid/57.6*15))); } var m=M('블로킹→회전 전환 연결', be, '', null, 'Blocking이 실제 몸통 회전 증가와 연결되는지 보는 context/bridge. Trunk 회전 변인과 중복될 수 있어 Blocking score에서는 제외.', 'blockConvEff', 1); m.neutral=true; return m; })()
+        (function(){ var be=null; if(B.torsoRotV!=null&&B.apBrake!=null){ var pred=837+19.6*B.apBrake; var resid=B.torsoRotV-pred; be=Math.max(10,Math.min(100,Math.round(50+resid/57.6*15))); } var m=M('블로킹→회전 전환 연결', be, '', null, '몸통 회전 속도가 제동 크기로 예측한 값(837+19.6×제동)보다 얼마나 높은지(잔차)를 10~100으로 바꾼 참고값 · 블로킹과 회전 사이의 인과나 시간 연결을 뜻하지 않으며, 몸통 회전 변인과 겹쳐 블로킹 점수에서 뺌', 'blockConvEff', 1); m.neutral=true; return m; })()
       ]
     };
 
@@ -571,7 +811,7 @@
     var storage = {
       key: 'storage', label: '4. 몸통 (저장)', sub: '착지~코킹기 탄성 에너지 저장 — 골반·몸통 분리(X-Factor)·어깨 외회전·견갑 로딩·몸통 뒤젖힘',
       metrics: [
-        (function(){ var m=M('피크 X-Factor (분리 크기)', r1(B.xfPeak == null ? null : Math.abs(B.xfPeak)), '°', null, '골반-몸통 분절 간 수직축 상대회전(Trunk_wrt_Pelvis_Angle_Z) KH→BR peak · 코치=|magnitude|. 골반과 몸통이 얼마나 분리되어 회전 준비가 되었는지를 봅니다. 분리가 크다고 항상 좋은 것은 아니며, 언제 만들어지고 언제 풀리는지가 중요합니다. 엘리트 중앙 ' + ((typeof PITCH_NORMS !== 'undefined' && PITCH_NORMS.xfPeak) ? PITCH_NORMS.xfPeak.med : '–') + '°.', 'xfPeak', 1); m.neutral=true; m.signedValue=B.xfPeak; m.displayAbsCoach=true; return m; })(),
+        (function(){ var m=M('피크 X-Factor (분리 크기)', r1(B.xfPeak == null ? null : Math.abs(B.xfPeak)), '°', null, '골반-몸통 분절 간 수직축 상대회전(Trunk_wrt_Pelvis_Angle_Z) KH→BR peak · 코치=|magnitude| · 골반과 몸통이 얼마나 분리되어 회전 준비가 되었는지를 봄 · 분리가 크다고 항상 좋은 것은 아니며, 언제 만들어지고 언제 풀리는지가 중요 · 엘리트 중앙 ' + ((typeof PITCH_NORMS !== 'undefined' && PITCH_NORMS.xfPeak) ? PITCH_NORMS.xfPeak.med : '–') + '°.', 'xfPeak', 1); m.neutral=true; m.signedValue=B.xfPeak; m.displayAbsCoach=true; return m; })(),
         (function(){ var m=M('어깨 MER (최대 외회전)', r1(B.merPk), '°', null, '코킹기 최대 외회전. [A5] 적정 범위형 — 과도·부족 모두 MER·몸통 전달과 함께 해석(arm MAP score 제외).', 'merPk', 'range'); m.neutral=true; return m; })(),
         (function(){ var m=M('견갑골 로딩 (프록시)', r1(B.scapLoad), '°', null, '견갑골 로딩 프록시 = FC 어깨 수평외전 |각|. [A5] range·context — 단독 우열 아님(arm MAP score 제외).', 'scapLoad', 'range'); m.neutral=true; return m; })(),
         M('FC 몸통 뒤젖힘각', r1(B.leanBack), '°', _scN(B.leanBack, 'leanBack', 1), '착지 시 후방 기울임(직립=0, 뒤로 +). +가 정상, 음수면 FC에서 앞으로 굽음 경고', 'leanBack', 1, (B.leanBack != null && B.leanBack < 0) ? 'FC에서 몸통이 앞으로 ' + r1(-B.leanBack) + '° 굽음 — 후방 기울임 부족' : null),  // [H3 2026-06-14] sc(10.1,4.6)→_scN(norm med 2.6): 표시밴드(norm)와 점수 정합
@@ -581,7 +821,9 @@
           + (B.xfAtFC != null ? r1(B.xfAtFC) + '° / 최대 ' + r1(B.xfPeak == null ? null : Math.abs(B.xfPeak)) + '°. ' : '. ')
           + (UPLIFT
             ? 'Uplift는 FC=자체검출 사용하나 X-Factor peak 시점 추정 한계로 참고용(저신뢰) — 정밀 평가는 Theia(앞발 GRF FC) 권장.'
-            : 'Theia=앞발 GRF 기반 FC라 신뢰. 현재 평가: ' + (_foStatus || '-') + '.'),
+            : (_evSrc === 'kinematic'
+              ? '키네마틱 FC 검출(힘판 미측정). 현재 평가: ' + (_foStatus || '-') + '.'   // [2026-07-19 grf_absent 정직성] 힘판 없는 세션은 GRF 기반 FC라 주장하지 않음
+              : 'Theia=앞발 GRF 기반 FC라 신뢰. 현재 평가: ' + (_foStatus || '-') + '.')),
           'xfReleasedPctByFC', -1, _foWarn),
         (function(){ var m=M('X-Factor 풀림 시점 (FC 기준, 보조)', B.xfPeakFromFC, 'ms', null, '최대 분리 시점 − FC. 양수=FC 직후 유지(엘리트 중앙 +13ms), 음수=착지 전 풀림. flying open 주지표는 위 「FC까지 풀린 비율」. ' + (UPLIFT ? 'Uplift 저신뢰(참고용).' : ''), 'xfPeakFromFC', 1); m.neutral=true; return m; })(),
         M('X-Factor 풀림 속도', B.xfUnwindV, '°/s', _scN(B.xfUnwindV, 'xfUnwindV', 1), 'peak 분리 이후 BR 까지 분리가 줄어드는 최대 각속도 = 상체가 골반을 따라잡는(풀림) 속도. 엘리트 그룹 중앙 772°/s. 적절히 빨라야 저장된 탄성 에너지가 상체로 전달됨', 'xfUnwindV', 1)  // [H3 2026-06-14] sc(772,70)→_scN(norm med 772·IQR per)
@@ -599,16 +841,16 @@
         M('팔 회전 속도', r1(B.armRotV), '°/s', _scN(B.armRotV,'armRotV',1), '어깨 내회전 각속도 · 엘리트 중앙 '+(NB.armRotV?NB.armRotV.med:'–')+'°/s', 'armRotV', 1),
         (function(){ var m=M('팔꿈치 신전 속도', r1(B.elbowExtV), '°/s', null, '전완 각속도 peak. [A5] optional context — 높다고 무조건 우수 아님(몸통 전달 부족 시 팔꿈치 의존 가능). 엘리트 중앙 '+(NB.elbowExtV?NB.elbowExtV.med:'–')+'°/s', 'elbowExtV', 1); m.neutral=true; return m; })(),
         M('몸통 ME 피크', r1(B.trunkME), 'J', _scN(B.trunkME, 'trunkME', 1), '몸통 분절 역학에너지. 클수록 좋음', 'trunkME', 1),  // [H3 2026-06-14] sc(588,42)→_scN(norm med 480.4): 엘리트 중앙값 밴드'정상'↔점수87 모순 해소
-        M('몸통 ME 효율 (J/kg)', (B.trunkME!=null&&meta&&meta.weight_kg?r2(B.trunkME/meta.weight_kg):null), 'J/kg', _scN((B.trunkME!=null&&meta&&meta.weight_kg?B.trunkME/meta.weight_kg:null), 'trunkME_kg', 1), '몸통 ME ÷ 체중 = 체격보정 효율. 절대J(생성능력)와 ★병기 — 절대J=체격과 r0.86이라 효율 관점 추가(코어 변인 유지·ADD-only). 클수록 좋음', 'trunkME_kg', 1),  // [2026-06-21 코치검증 재검토] 에너지 체격의존 보정·병기
+        M('몸통 역학적 에너지 · 체중당(위치에너지 포함)', (B.trunkME!=null&&meta&&meta.weight_kg?r2(B.trunkME/meta.weight_kg):null), 'J/kg', _scN((B.trunkME!=null&&meta&&meta.weight_kg?B.trunkME/meta.weight_kg:null), 'trunkME_kg', 1), '몸통 분절 역학적 에너지(위치에너지 + 병진 운동에너지 + 회전 운동에너지)의 정점을 체중으로 나눈 값(J/kg) · 효율이나 몸통 근육이 만든 에너지를 잰 값 아님 · 절대값(J)은 체격과 r≈0.86이라 함께 봄', 'trunkME_kg', 1),  // [2026-06-21 코치검증 재검토] 에너지 체격의존 보정·병기
         M('상완 ME 피크', r1(B.humME), 'J', _scN(B.humME, 'humME', 1), '투구 상완 분절 역학에너지. 클수록 좋음', 'humME', 1),  // [H3 2026-06-14] sc(207,23)→_scN(norm med 154.2)
-        M('상완 ME 효율 (J/kg)', (B.humME!=null&&meta&&meta.weight_kg?r2(B.humME/meta.weight_kg):null), 'J/kg', _scN((B.humME!=null&&meta&&meta.weight_kg?B.humME/meta.weight_kg:null), 'humME_kg', 1), '상완 ME ÷ 체중 = 체격보정 효율. 절대J와 병기(상완은 체중 r0.48로 절반은 속도신호 — 정규화 후 잔존 미흡=실제약점). 클수록 좋음', 'humME_kg', 1),  // [2026-06-21 코치검증 재검토] 에너지 체격의존 보정·병기
+        M('상완 역학적 에너지 · 체중당(위치에너지 포함)', (B.humME!=null&&meta&&meta.weight_kg?r2(B.humME/meta.weight_kg):null), 'J/kg', _scN((B.humME!=null&&meta&&meta.weight_kg?B.humME/meta.weight_kg:null), 'humME_kg', 1), '투구 팔 상완 분절 역학적 에너지(위치에너지 + 병진 운동에너지 + 회전 운동에너지)의 정점을 체중으로 나눈 값(J/kg) · 효율을 잰 값 아님 · 상완은 체중과 r≈0.48이라 절반은 속도 신호', 'humME_kg', 1),  // [2026-06-21 코치검증 재검토] 에너지 체격의존 보정·병기
         (function(){ var m=M('몸통 돌리기 에너지', r1(B.trunkRotKE), 'J', null, '몸통 축회전 운동에너지(½Iω², 추정). ★회전 속도(점수)와 r=.83으로 거의 같은 변인이라 점수 중복 → 참고(분배%·절대J 추정)로만. 회전 분배 ' + (B.trunkRotShare == null ? '–' : B.trunkRotShare + '%'), 'trunkRotKE', 1); m.neutral=true; return m; })(),
         (function(){ var m=M('몸통 앞으로 덮기 에너지', r1(B.trunkFlexKE), 'J', null, '몸통 전방 굴곡 운동에너지(½Iω², 추정). 굴곡 속도(점수)와 같은 계열 → 참고로만. 굴곡 분배 ' + (B.trunkFlexShare == null ? '–' : B.trunkFlexShare + '%'), 'trunkFlexKE', 1); m.neutral=true; return m; })(),
         M('몸통 측굴 속도', r1(B.trunkLatV), '°/s', _scN(B.trunkLatV, 'trunkLatV', 1), '몸통 측굴(옆 기울이기) 각속도 peak — 팔 높이·릴리스 기여(분절내 운동학이라 에너지 대신 속도로 점수). 검증(34명): 엘리트 324>상동고 288°/s, 구속 r=.51. 클수록 좋음', 'trunkLatV', 1),  // [H3 2026-06-14] sc(404,31)→_scN(norm med 322)
         (function(){ var m=M('몸통 옆 기울이기 에너지', r1(B.trunkLatKE), 'J', null, '몸통 측굴 운동에너지(½Iω², 추정). 측굴 속도(점수)와 같은 계열 → 참고로만. 측굴 분배 ' + (B.trunkLatShare == null ? '–' : B.trunkLatShare + '%'), 'trunkLatKE', 1); m.neutral=true; return m; })(),
-        (function(){ var m=M('ΔME 전달 (몸통 FC→BR)', B.efDeltaTrunkME, 'J', null, 'Trunk_ME[FC]−[BR] · 역동역학 low-confidence · context · score 미반영.', 'efDeltaTrunkME', 1); m.neutral=true; m.lowConfidence=true; return m; })(),
+        (function(){ var m=M('몸통 에너지 변화(착지→릴리스)', B.efDeltaTrunkME, 'J', null, 'Trunk_ME[FC]−[BR] · 역동역학 low-confidence · context · score 미반영.', 'efDeltaTrunkME', 1); m.neutral=true; m.lowConfidence=true; return m; })(),
         (function(){ var m=M('ΔHumME (MER→BR)', B.efDeltaHumME, 'J', null, 'Humerus_ME[MER]−[BR] · low-confidence · context · score 미반영.', 'efDeltaHumME', 1); m.neutral=true; m.lowConfidence=true; return m; })(),
-        (function(){ var m=M('어깨→팔꿈치 파워 타이밍', r1(B.ppShoElb), 'ms', null, '어깨 관절파워 정점 → 팔꿈치 관절파워 정점 시간차. 팔 내부 전달 순서(파워 기준). 그룹에선 팔꿈치 파워가 어깨보다 먼저 정점인 경우가 많아 음수가 흔함 — 우열 아님, 그룹 위치로 해석.', 'ppShoElb', 1); m.neutral=true; return m; })()
+        (function(){ var m=M('어깨·팔꿈치 관절 파워 정점 시간차', r1(B.ppShoElb), 'ms', null, '어깨 관절 파워 정점에서 팔꿈치 관절 파워 정점까지의 시간차(ms) · 팔 안에서 에너지가 넘어간 순서를 잰 값이 아니라 두 정점의 시각 차이 · 그룹에서는 팔꿈치 정점이 먼저 오는 경우가 많아 음수가 흔하며, 우열이 아니라 그룹 안 위치로 봄', 'ppShoElb', 1); m.neutral=true; return m; })()
         // [2026-05-26] 팔꿈치 신전 파워(역동역학 추정) 삭제(교수 지시) — 릴리스는 직접 운동학(회전속도·분절KE)만 유지
       ]
     };
@@ -618,9 +860,9 @@
     var injuryLoad = {
       key: 'injuryload', aux: true, label: '부상 잠재 부하 (추정)', sub: '상지 관절 토크·관절력 — 회전 가속을 만들고 견디는 내부 부하 (어깨→팔꿈치 순). 마커리스 역동역학 추정·14쌍 보정. 참고용·단독 진단 금지',
       metrics: [
-        M('어깨 관절 모멘트 (결과)', r1(B.shoulderMoment), 'N·m', null, '투구 어깨 관절 모멘트 peak(3축 결과 크기) — 회전근개·관절낭 부하. 마커리스 역동역학 추정·14쌍 보정', 'shoulderMoment', 1),
+        M('어깨 관절 모멘트(3축 합성 크기)', r1(B.shoulderMoment), 'N·m', null, '투구 어깨 관절 모멘트의 3축 합성 크기 정점(N·m) — 회전근개·관절낭 부하 지표 · 내회전 성분만 따로 잰 값 아님 · 어깨·팔꿈치 부하는 거의 같은 양(우리 r 0.94) — 따로 떼어 해석하지 않음 · 마커리스 역동역학 추정·14쌍 보정', 'shoulderMoment', 1),
         M('어깨 분리력 (distraction)', r1(B.shoulderForce), 'N', null, '투구 어깨 관절 반력 peak(결과) — 견인 부하 부상지표. 마커리스 역동역학 추정·14쌍 보정', 'shoulderForce', 1),
-        M('팔꿈치 관절 모멘트 (결과)', r1(B.elbowMoment), 'N·m', null, '투구 팔꿈치 관절 모멘트 peak(3축 결과 크기) — 내측측부인대(UCL) 부하와 직결되는 부상지표. 마커리스 역동역학 추정·14쌍 보정', 'elbowMoment', 1),
+        M('팔꿈치 관절 모멘트(3축 합성 크기)', r1(B.elbowMoment), 'N·m', null, '투구 팔꿈치 관절 모멘트의 3축 합성 크기 정점(N·m) · 외반(내측) 성분만 따로 잰 값이 아니어서 내측측부인대(UCL)가 받는 부하와 같지 않음 · 어깨·팔꿈치 부하는 거의 같은 양(우리 r 0.94) — 따로 떼어 해석하지 않음 · 마커리스 역동역학 추정·14쌍 보정', 'elbowMoment', 1),
         M('팔꿈치 관절력', r1(B.elbowForce), 'N', null, '투구 팔꿈치 관절 반력 peak(결과) — 관절 부하. 마커리스 역동역학 추정·14쌍 보정', 'elbowForce', 1)
       ]
     };
@@ -628,10 +870,10 @@
     var transfer = null;
     if (energyTransfer) {
       var magM = [
-        (function(){ var m=M('어깨 에너지 생성', r1(B.shGen), 'J', null, '어깨 관절 에너지 생성 ∫P dt. [A5] load context — 몸통 전달 부족 시 어깨 보상 가능(arm MAP score 제외).', 'shGen', 1); m.neutral=true; return m; })(),
-        M('어깨 직접전달 (force power)', r1(B.shForceTransfer), 'J', _scRk(B.shForceTransfer,'shForceTransfer'), '★어깨 관절 force power(F·v_jc) ∫dt = 트렁크→상완 분절 간 *직접 에너지 전달*. 생성(어깨 에너지 생성=moment power)과 구분되는 키네틱체인 전달의 실측(신 V3D 파이프라인). 적정범위 점수(엘리트 n=28 IQR · coach-blind 검증완료·2026-07-02 교수 승인).', 'shForceTransfer', 'range'),
-        M('팔꿈치 직접전달 (force power)', r1(B.elForceTransfer), 'J', _scRk(B.elForceTransfer,'elForceTransfer'), '팔꿈치 관절 force power ∫dt = 상완→전완 분절 간 직접 에너지 전달. 적정범위 점수(엘리트 n=28).', 'elForceTransfer', 'range'),
-        (function(){ var m=M('팔꿈치 에너지 흡수', r1(B.elbAbs), 'J', null, '팔꿈치 감속 흡수 에너지. [A5] load context — 전달·방출 부족 시 팔꿈치 부담 신호(클수록 좋음 아님).', 'elbAbs', 'abs'); m.neutral=true; return m; })()
+        (function(){ var m=M('어깨 에너지 생성 — X축(굴곡·신전) 성분', r1(B.shGen), 'J', null, '어깨 관절 에너지 생성 ∫P dt. [A5] load context — 몸통 전달 부족 시 어깨 보상 가능(arm MAP score 제외).', 'shGen', 1); m.neutral=true; return m; })(),
+        M('어깨 관절력으로 전달된 일 — 몸통→상완(관절력 경로 성분)', r1(B.shForceTransfer), 'J', _scRk(B.shForceTransfer,'shForceTransfer'), '어깨 관절력 파워(F·v)의 양(+) 적분 — 몸통 쪽에서 상완 쪽으로 관절력을 통해 들어간 일(J) · 관절력 경로 성분이며 몸통→팔 에너지 전달 전체가 아님 · 관절 토크 파워 경로는 포함하지 않고, 허리(L5/S1) 관절은 이 모델에 없음 · 적정범위 점수(엘리트 n=28 IQR · coach-blind 검증완료·2026-07-02 교수 승인)', 'shForceTransfer', 'range'),
+        M('팔꿈치 관절력으로 전달된 일 — 상완→전완(관절력 경로 성분)', r1(B.elForceTransfer), 'J', _scRk(B.elForceTransfer,'elForceTransfer'), '팔꿈치 관절력 파워(F·v)의 양(+) 적분 — 상완 쪽에서 전완 쪽으로 관절력을 통해 들어간 일(J) · 관절력 경로 성분이며 에너지 전달 전체가 아님 · 관절 토크 파워 경로는 포함하지 않음 · 적정범위 점수(엘리트 n=28)', 'elForceTransfer', 'range'),
+        (function(){ var m=M('팔꿈치 에너지 흡수 — X축(굴곡·신전) 성분', r1(B.elbAbs), 'J', null, '팔꿈치 감속 흡수 에너지. [A5] load context — 전달·방출 부족 시 팔꿈치 부담 신호(클수록 좋음 아님).', 'elbAbs', 'abs'); m.neutral=true; return m; })()
       ];
       var _SEQK = { '시퀀스 정확도':'seqPct', '채찍 가속 (팔/몸통)':'whipRatio', '운동사슬 타이밍':'chainTiming' };  // 그룹 기준 부여용 키
       var _SEQLBL = { seqPct:'순서 정확도 (하체→몸통→팔)', whipRatio:'팔 채찍 효과', chainTiming:'연결 타이밍' };  // [2026-06-15 #1] 현장 야구 용어 라벨
@@ -650,15 +892,15 @@
         if (m.key === 'whipRatio')   { m.score = _scRk(m.value, 'whipRatio'); m.dir = 'range'; m.neutral = false; }  // [2026-06-21] 단조→적정범위: 낮은 whip=팔느림 OR 몸통빠름(방향모호)+armRotV 이중계상 → 강한 몸통 벌점 방지. 전달은 armTransferRatio가 담당.
         else if (m.key === 'seqPct' || m.key === 'chainTiming') { m.neutral = true; m.score = null; }
       });
-      // 앞무릎 신전 활용/전달 유형 (문서준=회전-주도/흡수, 이영하=무릎신전-주도/생성). 둘 다 유효 엘리트 패턴 → 서술형(점수 없음)
+      // 앞무릎 신전 활용/전달 유형 (회전-주도/흡수, 무릎신전-주도/생성). 둘 다 유효 엘리트 패턴 → 서술형(점수 없음)
       var kneeM = [
         M('앞무릎 활용 유형', B.driveType, '', null, '순 무릎 신전(FC→BR)≥13° = 신전-vault형(무릎 펴며 에너지 생성·들어올림), 미만 = 버팀-흡수형(앞무릎 버티며 흡수·굽은 축으로 회전). 두 유형 모두 유효 엘리트 패턴(우열 아님). ※ 동작 유형(드라이브/회전 주도)과는 별개 — 이건 앞다리 사용 전략. 전달 효율은 이 유형(ROM)이 아니라 ‘앞무릎 신전속도’가 가름(34명 검증 r≈.55) — 유형=서술 라벨', 'driveType', null),
-        M('무릎 신전 에너지', r1(B.kneeExtE), 'J', null, '앞무릎 신전으로 생성한 에너지(∫P⁺·dt). 그룹 분포 내 위치(우열 아님)', 'kneeExtE', 1),
+        M('무릎 신전 에너지', r1(B.kneeExtE), 'J', null, '앞무릎 신전으로 생성한 에너지(∫P⁺·dt · FC→BR 전체 · 체중 보정 없음). 그룹 분포 내 위치(우열 아님) · 앞무릎 최대 굽힘→BR 만 본 체중당 값 = 블로킹 「앞무릎 신전 일」', 'kneeExtE', 1),
         M('무릎 신전 기여 비율', r1(B.kneeContribPct), '%', null, '무릎 생성에너지 ÷ (생성+흡수). 높을수록 신전우세·낮을수록 흡수우세 — 그룹 분포 내 위치(우열 아님)', 'kneeContribPct', 1),
         M('무릎 신전–몸통 회전 타이밍 지연', r1(B.kneeTrunkLag), 'ms', null, '무릎 신전속도 peak − 몸통 회전속도 peak. [K5-A] 적정 범위형 timing(context) — p25~p75=양호, 너무 이르거나 늦으면 범위 이탈(클수록/작을수록 우수 아님).', 'kneeTrunkLag', 1),
-        M('무릎→몸통 파워 타이밍', r1(B.ppKneeTrunk), 'ms', null, '리드무릎 관절파워 정점 → 몸통 분절파워(dME/dt) 정점 시간차(+면 무릎 먼저). ★파워 기준 순서는 속도 시퀀스와 다를 수 있음(대화정리 §5) — 위 "무릎 신전–몸통 회전 타이밍"(속도 기준)과 비교해 보세요. 그룹 위치(우열 아님)', 'ppKneeTrunk', 1),
-        M('몸통→상완 파워 타이밍', r1(B.ppTrunkHum), 'ms', scR(B.ppTrunkHum, 59, 86), '몸통 분절파워 정점 → 상완 분절파워 정점 시간차 = 몸통→팔 전달 타이밍. ★[2026-06-02] 엘리트 정상 윈도우(59~86ms) 안=양호(범위 점수). 몸통 단계 \'팔로 전달\'.', 'ppTrunkHum', 1),
-        (function(){ var m=M('몸통→팔 기여비율 (설명·비점수)', r1(B.armTransferRatio), '%', null, '팔(상완) 에너지 중 몸통에서 받은 비율 = (팔 총 − 팔 자체)÷팔 총. ★[2026-06-22 GPT적대검토 반영] 점수 강등(설명변수). 정의상 = 1−(팔 자체생성/팔 총)이라, 팔이 스스로 강하게 만들수록 비율이 *자동으로* 낮아지는 산술 길항(강한 팔을 \'낮은 전달\'로 벌점화 — 박찬우 등 코호트 최강 팔이 pos1 미흡으로 찍힘). 게다가 엘리트 분포가 95~100%에 포화돼 백분위 해상도 없음. 따라서 효율 우열이 아니라 \'팔 에너지 조달 방식(근위 의존 vs 자체생성)\' 설명용. 전달 타이밍=ppTrunkHum(범위점수)·부하=부상탭으로 별도 해석.', 'armTransferRatio', 1); m.neutral=true; return m; })()
+        M('앞무릎 관절 파워·몸통 에너지 변화율 정점 시간차', r1(B.ppKneeTrunk), 'ms', null, '앞무릎 관절 파워 정점에서 몸통 분절 에너지 변화율(dME/dt) 정점까지의 시간차(ms · 양수면 무릎이 먼저) · 분절 에너지 변화율은 그 분절 모든 경계의 합이라, 무릎에서 몸통으로 에너지가 넘어간 시점을 잰 값이 아님 · 속도 기준 순서(무릎 신전–몸통 회전 타이밍)와 다를 수 있음 · 그룹 위치로 봄(우열 아님)', 'ppKneeTrunk', 1),
+        M('몸통·상완 에너지 변화율 정점 시간차', r1(B.ppTrunkHum), 'ms', scR(B.ppTrunkHum, 59, 86), '몸통 에너지 변화율이 가장 큰 시점에서 상완 에너지 변화율이 가장 큰 시점까지의 시간차(ms) · 분절 에너지 변화율은 그 분절 모든 경계의 합이라, 어깨를 건너 팔로 넘어가는 시점을 잰 값이 아님 · 59~86 ms 안을 「정상」으로 보는 기준은 엘리트 분포 범위이며 최적 타이밍의 근거는 아님 · 점수는 이 범위 안=양호(범위 점수)로 매김', 'ppTrunkHum', 1),
+        (function(){ var m=M('몸통→팔 기여비율 (설명·비점수)', r1(B.armTransferRatio), '%', null, '팔(상완) 에너지 중 몸통에서 받은 비율 = (팔 총 − 팔 자체)÷팔 총. ★[2026-06-22 GPT적대검토 반영] 점수 강등(설명변수). 정의상 = 1−(팔 자체생성/팔 총)이라, 팔이 스스로 강하게 만들수록 비율이 *자동으로* 낮아지는 산술 길항(강한 팔을 \'낮은 전달\'로 벌점화 — 한 선수 등 코호트 최강 팔이 pos1 미흡으로 찍힘). 게다가 엘리트 분포가 95~100%에 포화돼 백분위 해상도 없음. 따라서 효율 우열이 아니라 \'팔 에너지 조달 방식(근위 의존 vs 자체생성)\' 설명용. 전달 타이밍=ppTrunkHum(범위점수)·부하=부상탭으로 별도 해석.', 'armTransferRatio', 1); m.neutral=true; return m; })()
       ];
       kneeM.forEach(function(m){ if(m.key==='kneeExtE'||m.key==='kneeContribPct'||m.key==='ppKneeTrunk'||m.key==='kneeTrunkLag') m.neutral=true; });  // 무릎 유형·파워/속도 타이밍 계열: 그룹 위치만(참고). [2026-06-02] 앞무릎 점수=6개(무너짐·전달·신전·버팀모멘트·흡수·골반회전)로 정리 → kneeTrunkLag 참고로. ppTrunkHum은 몸통 전달(범위점수).
       transfer = {
@@ -771,7 +1013,7 @@
     if (balanceStage) stages.push(balanceStage);
     if (injuryLoad) stages.push(injuryLoad);   // [2026-05-26] 부상 잠재 부하(추정) — 부상 탭에서 렌더
     // [2026-06-22 변인개혁 Phase4] styleNeutral — 회전우세형만 trunkFlexV·trunkLatV '미흡' 점수중립(전역 아님).
-    //   근거: 코치(이준혁=수직축 회전형→굴곡 느림은 스타일). [2026-07-03] 구속상관 근거(굴곡 r.17·측굴.09) 삭제 — 메카닉≠구속 원칙 + 같은 파일 :608 trunkLatV 구속 r=.51과 자기모순. 유형중립은 코치앵커/유형근거로만 성립. 전역중립화=발달선수 폭락→타겟.
+    //   근거: 코치(한 선수=수직축 회전형→굴곡 느림은 스타일). [2026-07-03] 구속상관 근거(굴곡 r.17·측굴.09) 삭제 — 메카닉≠구속 원칙 + 같은 파일 :608 trunkLatV 구속 r=.51과 자기모순. 유형중립은 코치앵커/유형근거로만 성립. 전역중립화=발달선수 폭락→타겟.
     //   보수 다축(GPT v5): 회전강(z≥.25)+몸통ME 심하게 낮지않음(z≥-.3)+굴곡뚜렷낮음(z≤-.5)+체인지지2+안전(측굴 과도아님·팔단독 보상아님).
     (function(){
       function _z(k,v){ var n=NB[k]; if(!n||v==null) return null; var iqr=Math.abs(n.p75-n.p25)/1.349; return iqr?(v-n.med)/iqr:null; }
@@ -782,7 +1024,7 @@
       var _famKIN = (NB.pelvisRotV&&B.pelvisRotV!=null&&B.pelvisRotV>=NB.pelvisRotV.p25)?1:0;  // angular-kinematic
       var chain = _famEF + _famBR + _famKIN;
       // [2026-06-22 GPT적대검토 반영 2b] 안전 veto: 팔꿈치/어깨 부하가 명백한 outlier(z≥2.0=red flag)면 전략 면제 불가(고부하 보상형 미화 방지·asset≠risk).
-      //   ★threshold=2.0(≈p98): z≥1.0은 과도해 코치검증 레퍼런스(이준혁 zElb1.06·이영하 zSho1.35=회전-부하 coupling 비용)까지 부당탈락 → 명백한 고부하(김건우 z3.25~4.04)만 차단. (교수 튜닝 가능)
+      //   ★threshold=2.0(≈p98): z≥1.0은 과도해 코치검증 레퍼런스(선수 A zElb1.06·선수 B zSho1.35=회전-부하 coupling 비용)까지 부당탈락 → 명백한 고부하(선수 C z3.25~4.04)만 차단. (교수 튜닝 가능)
       var zElb=_z('elbowMoment',B.elbowMoment), zSho=_z('shoulderMoment',B.shoulderMoment);
       var _safetyOk = !((zElb!=null&&zElb>=2.0)||(zSho!=null&&zSho>=2.0));
       var rotDom = (zRot!=null&&zRot>=0.25) && (zTME!=null&&zTME>=-0.3) && (zFlex!=null&&zFlex<=-0.5) && chain>=2 && _safetyOk
@@ -952,7 +1194,7 @@
       var kneeH = (m = _mget(lin, 'wuHpct')) ? m.mean : null, piKH = (m = _mget(lin, 'wuDur')) ? m.mean : null, wuProp = (m = _mget(lin, 'wuPct')) ? m.mean : null, kneeAP = (m = _mget(lin, 'wuKneeAP')) ? m.mean : null;
       var pK = _rawPctl('wuHpct', kneeH), pT = _rawPctl('wuDur', piKH), pProp = _rawPctl('wuPct', wuProp), pAP = _rawPctl('wuKneeAP', kneeAP);
       var pPelC = _rawPctl('wuPelCoil', B.wuPelCoil), pTrkC = _rawPctl('wuTrunkCoil', B.wuTrunkCoil), pDh = _rawPctl('wuDriveHipER', B.wuDriveHipER), pTq = _rawPctl('wuCoilTq', B.wuCoilTq), pHH = _rawPctl('hipHinge', B.hipHinge);
-      // [2026-06-19] compact 보정: 보수정의(100−high_lift, 무릎높이 역수)는 회전이 느린 선수도 '빠른 전환형'으로 오라벨(안태건 회전 7p 등 4명).
+      // [2026-06-19] compact 보정: 보수정의(100−high_lift, 무릎높이 역수)는 회전이 느린 선수도 '빠른 전환형'으로 오라벨(한 선수 회전 7p 등 4명).
       //   → 핵심맵(WIN_CORE)이 정의하는 실제 변별변인(와인드업 회전속도 wuPelVel·wuTrkVel)으로 교체 = 분류기·평가 정합 + 오라벨 해소.
       var pPV = _rawPctl('wuPelVel', B.wuPelVel), pTV = _rawPctl('wuTrkVel', B.wuTrkVel);
       var raw = { high_lift: _avgN([pK, pT, pProp]), compact: _avgN([pPV, pTV]), coil_dominant: _avgN([pPelC, pTrkC, pDh, pTq]), linear_load: _avgN([pHH, pAP]) };
@@ -980,7 +1222,7 @@
     })();
     var windupRisk = (function () {
       var f = [], lin = stageStats.windup.linear, m;
-      if (earlyArm && earlyArm.label !== 'normal') f.push({ id: 'early_arm', label: (earlyArm.label === 'risk' ? 'KH 팔 조기 장전 위험' : 'KH 팔 조기 장전 주의'), detail: '무릎 최고점에서 던지는 팔이 어깨선보다 뒤로 ' + (earlyArm.handPost == null ? '–' : earlyArm.handPost) + '%키 빠짐(팔꿈치 ' + (earlyArm.elbowPost == null ? '–' : earlyArm.elbowPost) + '%키 뒤·수평외전 ' + (earlyArm.horizAbd == null ? '–' : earlyArm.horizAbd) + '°) · 위험도 ' + earlyArm.risk + '/100 → 몸통 회전보다 팔이 먼저 준비되는 경향. FC 이후 몸통 회전 타이밍·MER·어깨/팔꿈치 부하를 함께 확인' + (earlyArm.conf ? '' : ' (손 추적 불안정·신뢰 낮음)') });
+      if (earlyArm && earlyArm.label !== 'normal') f.push({ id: 'early_arm', label: (earlyArm.label === 'risk' ? 'KH 팔 조기 장전 위험' : 'KH 팔 조기 장전 주의'), detail: '무릎 최고점에서 던지는 팔이 어깨선보다 뒤로 ' + (earlyArm.handPost == null ? '–' : earlyArm.handPost) + '%키 빠짐(팔꿈치 ' + (earlyArm.elbowPost == null ? '–' : earlyArm.elbowPost) + '%키 뒤·수평외전 ' + (earlyArm.horizAbd == null ? '–' : earlyArm.horizAbd) + '°) · 위험도 ' + earlyArm.risk + '/100 → 몸통 회전보다 팔이 먼저 준비되는 경향 · FC 이후 몸통 회전 타이밍·MER·어깨/팔꿈치 부하 함께 확인' + (earlyArm.conf ? '' : ' (손 추적 불안정·신뢰 낮음)') });
       if (B.wuHSSbuild != null && B.wuHSSbuild < -2) f.push({ id: 'early_open', label: '비틀림 일찍 풀림', detail: '상·하체 비틀림 쌓임 ' + r1(B.wuHSSbuild) + '° · 다리 들기~KH에 골반-어깨 비틀림이 오히려 줄어듦 → 저장 전에 몸이 일찍 열릴 수 있음' });
       var cD = (m = _mget(lin, 'wuDur')) ? m.cv : null, cH = (m = _mget(lin, 'wuHpct')) ? m.cv : null;
       if ((cD != null && cD > 30) || (cH != null && cH > 20)) f.push({ id: 'variability', label: '구마다 들쭉날쭉', detail: '와인드업 리듬·무릎높이가 구마다 차이 큼' + (cD != null ? ' · 소요시간 편차 ' + r1(cD) + '%' : '') + (cH != null ? ' · 무릎높이 편차 ' + r1(cH) + '%' : '') + ' → 반복성·제구 점검' });
@@ -1030,7 +1272,16 @@
       return f;
     })();
 
-    return { stages: stages, stageStats: stageStats, windupType: windupType, windupRisk: windupRisk, earlyArm: earlyArm, strideType: strideType, strideRisk: strideRisk, blockingType: _blkType, blockingRisk: { low_brake: _blkLowBrake, low_com_control: _blkLowCom, high_collapse: _blkHighCollapse, low_support: _blkLowSupport, penalty: _blkPenalty, warning: _blkRiskWarn }, fast_kmh: fastKmh, slow_kmh: slowKmh, delivery: _dlv || null, deliverySlot: _slot || null, deliveryNonOH: _nonOH, score_trial_policy: { n_for_score: _scoreTrialsPack.nUsed, n_trials: _scoreTrialsPack.nAll, n_excluded: _scoreTrialsPack.nExcluded, fallback_all_trials: _scoreTrialsPack.usedFallback, policy: 'GPT_v1_valid_for_score_avg_2026-06-03' }, energyFlowEFI: (function () {
+    /* [2026-08-12 교수 결정·안건6] 유효 투구 0개 = 점수 STOP.
+       옛 폴백(무효 시행 전체로 재점수화)은 값 산출에만 남기고(원시 그래프·측정 품질 표시 유지),
+       점수는 전부 NA — 무효 투구로 만든 점수를 유효 점수처럼 내보내지 않는다.
+       선수는 화면에 유지: 상태 '측정 불충분' · 이유 '유효 투구 0/N' · 재측정 안내는 소비자가 이 플래그로 표시. */
+    var measurementInsufficient = null;
+    if (_scoreTrialsPack.usedFallback) {
+      stages.forEach(function (st) { (st.metrics || []).forEach(function (m) { if (m) m.score = null; }); });
+      measurementInsufficient = { status: '측정 불충분', reason: '유효 투구 0/' + _scoreTrialsPack.nAll, advice: '점수 미산출 — 값·그래프는 참고 표시 · 재측정 권장' };
+    }
+    return { stages: stages, stageStats: stageStats, lowerBodyUtil: (B ? B.lowerBodyUtil : null), measurement_insufficient: measurementInsufficient, windupType: windupType, windupRisk: windupRisk, earlyArm: earlyArm, strideType: strideType, strideRisk: strideRisk, blockingType: _blkType, blockingRisk: { low_brake: _blkLowBrake, low_com_control: _blkLowCom, high_collapse: _blkHighCollapse, low_support: _blkLowSupport, penalty: _blkPenalty, warning: _blkRiskWarn }, fast_kmh: fastKmh, slow_kmh: slowKmh, delivery: _dlv || null, deliverySlot: _slot || null, deliveryNonOH: _nonOH, score_trial_policy: { n_for_score: _scoreTrialsPack.nUsed, n_trials: _scoreTrialsPack.nAll, n_excluded: _scoreTrialsPack.nExcluded, fallback_all_trials: _scoreTrialsPack.usedFallback, policy: 'GPT_v1_valid_for_score_avg_2026-06-03 · stop_when_zero_valid_2026-08-12' }, energyFlowEFI: (function () {
       var comps = [], wSum = 0;
       function bandSc(val, p25, p75, w) {
         if (val == null || !isFinite(val)) return;

@@ -1,0 +1,636 @@
+{
+ "version": "elite_cohort v1.0 (A안·교수 확정 2026-09-04)",
+ "rule": {
+  "eligible_groups": [
+   "프로",
+   "독립리그",
+   "대학",
+   "고교"
+  ],
+  "never_groups": [
+   "중학",
+   "상동고",
+   "U12",
+   "U18",
+   "컨벤션고",
+   "중등",
+   "초등"
+  ],
+  "pro_all": true,
+  "velo_cut_kmh": 140.0,
+  "velo_basis": "랩소도 직구 상위3구 평균(players.js velo) → 없으면 세션 최고구속(normative_velo max)",
+  "grf_swap_flag_only": [],
+  "homonym": "접미사(대학/고교)로 구분·각각 규칙 판정(이지호 2004 대학·2008 고교)"
+ },
+ "n": 32,
+ "n_grf_ok": 32,
+ "by_group": {
+  "프로": 11,
+  "독립리그": 3,
+  "대학": 7,
+  "고교": 11
+ },
+ "members": [
+  {
+   "name": "이영하",
+   "group": "프로",
+   "rep_velo": 148.3,
+   "velo_basis": "랩소도 상위3구 평균",
+   "rule": "프로 전원",
+   "grf_ok": true
+  },
+  {
+   "name": "엄상현",
+   "group": "프로",
+   "rep_velo": 144.7,
+   "velo_basis": "세션 최고구속",
+   "rule": "프로 전원",
+   "grf_ok": true
+  },
+  {
+   "name": "이준혁",
+   "group": "프로",
+   "rep_velo": 143.5,
+   "velo_basis": "세션 최고구속",
+   "rule": "프로 전원",
+   "grf_ok": true
+  },
+  {
+   "name": "박준용",
+   "group": "프로",
+   "rep_velo": 141.9,
+   "velo_basis": "세션 최고구속",
+   "rule": "프로 전원",
+   "grf_ok": true
+  },
+  {
+   "name": "박로건",
+   "group": "프로",
+   "rep_velo": 141.2,
+   "velo_basis": "세션 최고구속",
+   "rule": "프로 전원",
+   "grf_ok": true
+  },
+  {
+   "name": "박신지",
+   "group": "프로",
+   "rep_velo": 140.5,
+   "velo_basis": "랩소도 상위3구 평균",
+   "rule": "프로 전원",
+   "grf_ok": true
+  },
+  {
+   "name": "이현민",
+   "group": "프로",
+   "rep_velo": 139.3,
+   "velo_basis": "세션 최고구속",
+   "rule": "프로 전원",
+   "grf_ok": true
+  },
+  {
+   "name": "송재영",
+   "group": "프로",
+   "rep_velo": 138.4,
+   "velo_basis": "세션 최고구속",
+   "rule": "프로 전원",
+   "grf_ok": true
+  },
+  {
+   "name": "박웅",
+   "group": "프로",
+   "rep_velo": 138.2,
+   "velo_basis": "랩소도 상위3구 평균",
+   "rule": "프로 전원",
+   "grf_ok": true
+  },
+  {
+   "name": "홍원표",
+   "group": "프로",
+   "rep_velo": 135.7,
+   "velo_basis": "세션 최고구속",
+   "rule": "프로 전원",
+   "grf_ok": true
+  },
+  {
+   "name": "최성훈",
+   "group": "프로",
+   "rep_velo": 130.4,
+   "velo_basis": "세션 최고구속",
+   "rule": "프로 전원",
+   "grf_ok": true
+  },
+  {
+   "name": "이강민",
+   "group": "독립리그",
+   "rep_velo": 147.7,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 147.7 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "강매성",
+   "group": "독립리그",
+   "rep_velo": 146.1,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 146.1 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "송석현",
+   "group": "독립리그",
+   "rep_velo": 142.7,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 142.7 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "허준호",
+   "group": "대학",
+   "rep_velo": 145,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 145 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "박경도",
+   "group": "대학",
+   "rep_velo": 142.3,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 142.3 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "이지호(대학)",
+   "group": "대학",
+   "rep_velo": 142.3,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 142.3 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "권성남",
+   "group": "대학",
+   "rep_velo": 141.6,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 141.6 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "황현서",
+   "group": "대학",
+   "rep_velo": 140.3,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 140.3 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "조원우",
+   "group": "대학",
+   "rep_velo": 140.1,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 140.1 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "홍주환",
+   "group": "대학",
+   "rep_velo": 140,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 140 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "김재훈",
+   "group": "고교",
+   "rep_velo": 150,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 150 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "박찬우",
+   "group": "고교",
+   "rep_velo": 148.2,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 148.2 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "이지호(고교)",
+   "group": "고교",
+   "rep_velo": 146.3,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 146.3 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "차현빈",
+   "group": "고교",
+   "rep_velo": 145.6,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 145.6 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "문서준",
+   "group": "고교",
+   "rep_velo": 144.7,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 144.7 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "손민서",
+   "group": "고교",
+   "rep_velo": 143,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 143 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "차보성",
+   "group": "고교",
+   "rep_velo": 142.5,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 142.5 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "김태우",
+   "group": "고교",
+   "rep_velo": 141.6,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 141.6 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "문준혁",
+   "group": "고교",
+   "rep_velo": 140.8,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 140.8 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "김태현",
+   "group": "고교",
+   "rep_velo": 140.3,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 140.3 ≥ 140",
+   "grf_ok": true
+  },
+  {
+   "name": "손경록",
+   "group": "고교",
+   "rep_velo": 140.3,
+   "velo_basis": "세션 최고구속",
+   "rule": "대표구속 140.3 ≥ 140",
+   "grf_ok": true
+  }
+ ],
+ "rejected_eligible_group": [
+  {
+   "name": "김건우",
+   "group": "대학",
+   "rep_velo": 132.9,
+   "reason": "대표구속 132.9 < 140"
+  },
+  {
+   "name": "김민준",
+   "group": "대학",
+   "rep_velo": 122.6,
+   "reason": "대표구속 122.6 < 140"
+  },
+  {
+   "name": "김범근",
+   "group": "대학",
+   "rep_velo": 135.2,
+   "reason": "대표구속 135.2 < 140"
+  },
+  {
+   "name": "김태양",
+   "group": "대학",
+   "rep_velo": 136.4,
+   "reason": "대표구속 136.4 < 140"
+  },
+  {
+   "name": "김현태",
+   "group": "대학",
+   "rep_velo": 138.6,
+   "reason": "대표구속 138.6 < 140"
+  },
+  {
+   "name": "나경수",
+   "group": "대학",
+   "rep_velo": 136.5,
+   "reason": "대표구속 136.5 < 140"
+  },
+  {
+   "name": "박건형",
+   "group": "대학",
+   "rep_velo": 136.6,
+   "reason": "대표구속 136.6 < 140"
+  },
+  {
+   "name": "손수혁",
+   "group": "대학",
+   "rep_velo": 138,
+   "reason": "대표구속 138 < 140"
+  },
+  {
+   "name": "안요원",
+   "group": "대학",
+   "rep_velo": 134.1,
+   "reason": "대표구속 134.1 < 140"
+  },
+  {
+   "name": "오훈택",
+   "group": "대학",
+   "rep_velo": 138.8,
+   "reason": "대표구속 138.8 < 140"
+  },
+  {
+   "name": "이건호",
+   "group": "대학",
+   "rep_velo": 132.9,
+   "reason": "대표구속 132.9 < 140"
+  },
+  {
+   "name": "이윤민",
+   "group": "대학",
+   "rep_velo": 138.2,
+   "reason": "대표구속 138.2 < 140"
+  },
+  {
+   "name": "정튼튼",
+   "group": "대학",
+   "rep_velo": 136.5,
+   "reason": "대표구속 136.5 < 140"
+  },
+  {
+   "name": "최한결",
+   "group": "대학",
+   "rep_velo": 137.6,
+   "reason": "대표구속 137.6 < 140"
+  },
+  {
+   "name": "권영웅",
+   "group": "고교",
+   "rep_velo": 128.7,
+   "reason": "대표구속 128.7 < 140"
+  },
+  {
+   "name": "김동운",
+   "group": "고교",
+   "rep_velo": 130.6,
+   "reason": "대표구속 130.6 < 140"
+  },
+  {
+   "name": "김용현",
+   "group": "고교",
+   "rep_velo": 133.2,
+   "reason": "대표구속 133.2 < 140"
+  },
+  {
+   "name": "김하윤",
+   "group": "고교",
+   "rep_velo": 135.3,
+   "reason": "대표구속 135.3 < 140"
+  },
+  {
+   "name": "김현서",
+   "group": "고교",
+   "rep_velo": 137.4,
+   "reason": "대표구속 137.4 < 140"
+  },
+  {
+   "name": "남예현",
+   "group": "고교",
+   "rep_velo": 131.9,
+   "reason": "대표구속 131.9 < 140"
+  },
+  {
+   "name": "노영진",
+   "group": "고교",
+   "rep_velo": 117.6,
+   "reason": "대표구속 117.6 < 140"
+  },
+  {
+   "name": "문정환",
+   "group": "고교",
+   "rep_velo": 136.9,
+   "reason": "대표구속 136.9 < 140"
+  },
+  {
+   "name": "박계환",
+   "group": "고교",
+   "rep_velo": 132.1,
+   "reason": "대표구속 132.1 < 140"
+  },
+  {
+   "name": "박승원",
+   "group": "고교",
+   "rep_velo": 134.8,
+   "reason": "대표구속 134.8 < 140"
+  },
+  {
+   "name": "박정우",
+   "group": "고교",
+   "rep_velo": 133.1,
+   "reason": "대표구속 133.1 < 140"
+  },
+  {
+   "name": "박준후",
+   "group": "고교",
+   "rep_velo": 133.1,
+   "reason": "대표구속 133.1 < 140"
+  },
+  {
+   "name": "박지현",
+   "group": "고교",
+   "rep_velo": 134.8,
+   "reason": "대표구속 134.8 < 140"
+  },
+  {
+   "name": "배선우",
+   "group": "고교",
+   "rep_velo": 128.8,
+   "reason": "대표구속 128.8 < 140"
+  },
+  {
+   "name": "서영욱",
+   "group": "고교",
+   "rep_velo": 136.6,
+   "reason": "대표구속 136.6 < 140"
+  },
+  {
+   "name": "서재원",
+   "group": "고교",
+   "rep_velo": 135,
+   "reason": "대표구속 135 < 140"
+  },
+  {
+   "name": "손지환",
+   "group": "고교",
+   "rep_velo": 138,
+   "reason": "대표구속 138 < 140"
+  },
+  {
+   "name": "신강흔",
+   "group": "고교",
+   "rep_velo": 131.6,
+   "reason": "대표구속 131.6 < 140"
+  },
+  {
+   "name": "안태건",
+   "group": "고교",
+   "rep_velo": 134.7,
+   "reason": "대표구속 134.7 < 140"
+  },
+  {
+   "name": "안현석",
+   "group": "고교",
+   "rep_velo": 133.3,
+   "reason": "대표구속 133.3 < 140"
+  },
+  {
+   "name": "오성빈",
+   "group": "고교",
+   "rep_velo": 133,
+   "reason": "대표구속 133 < 140"
+  },
+  {
+   "name": "유동주",
+   "group": "고교",
+   "rep_velo": 133.6,
+   "reason": "대표구속 133.6 < 140"
+  },
+  {
+   "name": "유형석",
+   "group": "고교",
+   "rep_velo": 135,
+   "reason": "대표구속 135 < 140"
+  },
+  {
+   "name": "윤성모",
+   "group": "고교",
+   "rep_velo": 138.6,
+   "reason": "대표구속 138.6 < 140"
+  },
+  {
+   "name": "윤지섭",
+   "group": "고교",
+   "rep_velo": 138.9,
+   "reason": "대표구속 138.9 < 140"
+  },
+  {
+   "name": "이성재",
+   "group": "고교",
+   "rep_velo": 129.1,
+   "reason": "대표구속 129.1 < 140"
+  },
+  {
+   "name": "이세민",
+   "group": "고교",
+   "rep_velo": 137,
+   "reason": "대표구속 137 < 140"
+  },
+  {
+   "name": "이시율",
+   "group": "고교",
+   "rep_velo": 139.6,
+   "reason": "대표구속 139.6 < 140"
+  },
+  {
+   "name": "이주호",
+   "group": "고교",
+   "rep_velo": 128.1,
+   "reason": "대표구속 128.1 < 140"
+  },
+  {
+   "name": "이진서(고교)",
+   "group": "고교",
+   "rep_velo": 132.7,
+   "reason": "대표구속 132.7 < 140"
+  },
+  {
+   "name": "장지원",
+   "group": "고교",
+   "rep_velo": 135,
+   "reason": "대표구속 135 < 140"
+  },
+  {
+   "name": "장현준",
+   "group": "고교",
+   "rep_velo": 136.5,
+   "reason": "대표구속 136.5 < 140"
+  },
+  {
+   "name": "정명윤",
+   "group": "고교",
+   "rep_velo": 134.5,
+   "reason": "대표구속 134.5 < 140"
+  },
+  {
+   "name": "정주영",
+   "group": "고교",
+   "rep_velo": 136.6,
+   "reason": "대표구속 136.6 < 140"
+  },
+  {
+   "name": "지현민",
+   "group": "고교",
+   "rep_velo": 130,
+   "reason": "대표구속 130 < 140"
+  },
+  {
+   "name": "최현욱",
+   "group": "고교",
+   "rep_velo": 136.6,
+   "reason": "대표구속 136.6 < 140"
+  },
+  {
+   "name": "함성현",
+   "group": "고교",
+   "rep_velo": 128.4,
+   "reason": "대표구속 128.4 < 140"
+  },
+  {
+   "name": "김기영",
+   "group": "독립리그",
+   "rep_velo": 136.2,
+   "reason": "대표구속 136.2 < 140"
+  },
+  {
+   "name": "박민상",
+   "group": "독립리그",
+   "rep_velo": 133.3,
+   "reason": "대표구속 133.3 < 140"
+  },
+  {
+   "name": "이진서(독립리그)",
+   "group": "독립리그",
+   "rep_velo": 130.4,
+   "reason": "대표구속 130.4 < 140"
+  },
+  {
+   "name": "진해수",
+   "group": "독립리그",
+   "rep_velo": 129.4,
+   "reason": "대표구속 129.4 < 140"
+  },
+  {
+   "name": "황용원",
+   "group": "독립리그",
+   "rep_velo": 137.1,
+   "reason": "대표구속 137.1 < 140"
+  }
+ ],
+ "blocked_groups": {
+  "상동고": 14,
+  "중학": 4
+ },
+ "generated": "2026-10-11",
+ "generator": "pitching/biomotion-theia-dashboard/_분석/재측정_설계/gen_elite_cohort.py",
+ "note": "★우수투수테이아데이터 폴더(21명)·145+ 5명은 이 코호트가 아니다(연구 하위 태그). 규준·연구·문서는 이 파일을 참조."
+}

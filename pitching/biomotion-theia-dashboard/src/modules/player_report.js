@@ -11,15 +11,15 @@
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   var KMH = 1.609;
   var MET_KO = {
-    layback:'어깨 최대 외회전(레이백)', elbow_ext_velo:'팔꿈치 펴짐 속도', shoulder_abd_fp:'착지 시 어깨 벌림',
-    scap_load_fp:'견갑 힘 모으기(어깨 뒤모음)', shoulder_rot_velo:'어깨 내회전 속도', elbow_flex_fp:'착지 시 팔꿈치 굽힘',
-    hip_shoulder_sep_peak:'골반·몸통 분리 최대(X-Factor)', hip_shoulder_sep_fp:'착지 시 골반·몸통 분리',
-    torso_counter_rot:'몸통 역회전(꼬임)', torso_fwd_tilt_fp:'착지 시 몸통 앞기울기', torso_rot_fp:'착지 시 몸통 회전',
-    torso_side_bend_mer:'MER 시 몸통 옆기울기', torso_rot_br:'릴리스 시 몸통 회전',
+    layback:'어깨 최대 외회전(MER)', elbow_ext_velo:'팔꿈치 신전 속도', shoulder_abd_fp:'FC 시 어깨 외전',
+    scap_load_fp:'FC 시 견갑골 후인(스캡 로딩)', shoulder_rot_velo:'어깨 내회전 속도', elbow_flex_fp:'FC 시 팔꿈치 굴곡',
+    hip_shoulder_sep_peak:'최대 X-factor(골반–몸통 분리각)', hip_shoulder_sep_fp:'FC 시 X-factor',
+    torso_counter_rot:'몸통 역회전(코일)', torso_fwd_tilt_fp:'FC 시 몸통 전방 기울기', torso_rot_fp:'FC 시 몸통 회전',
+    torso_side_bend_mer:'MER 시 몸통 측굴', torso_rot_br:'BR 시 몸통 회전',
     torso_rot_velo:'몸통 회전속도', pelvis_rot_velo:'골반 회전속도',
-    lead_force_pct:'앞발 지면반력(버팀)', lead_knee_ext:'앞무릎 폄', stride_length:'스트라이드 길이',
-    cog_decel_ae:'무게중심 감속(기대대비)', lead_knee_ext_velo:'앞무릎 폄 속도',
-    rear_force_pct:'뒷발 지면반력(추진)', cog_decel:'무게중심 감속', max_cog_velo:'최대 전진속도' };
+    lead_force_pct:'앞발 지면반력(블로킹)', lead_knee_ext:'앞무릎 신전', stride_length:'스트라이드 길이',
+    cog_decel_ae:'COM 감속(기대 대비)', lead_knee_ext_velo:'앞무릎 신전 속도',
+    rear_force_pct:'뒷발 지면반력(추진)', cog_decel:'COM 감속', max_cog_velo:'COM 최대 전진 속도' };
   var METRIC_DRILL = {
     layback:'월 익스터널 로테이션 + 슬리퍼 스트레치로 어깨 외회전 가동범위 확보 → 리버스 스로우로 패턴 학습',
     elbow_ext_velo:'리버스 스로우 + 가벼운 플라이오 볼 던지기로 팔 채찍 가속',
@@ -60,8 +60,8 @@
     pelClose: '스텝 비하인드 + 셋업에서 골반 꼬임(닫힘) 강조로 회전 부하 적재',
     comDecel: METRIC_DRILL.cog_decel,
     vgrfRetain: '앞다리에 체중을 전부 싣고 릴리스까지 버티는 편측 런지 홀드 — 바닥 미는 힘을 끝까지 유지하기(조기 감소 교정)',
-    blockConvEff: '앞다리 제동 직후 골반→몸통 회전이 바로 이어지도록 안티로테이션 홀드 후 폭발적 회전 — 제동을 회전으로 전환',
-    armTransferRatio: '커넥션 볼(겨드랑이 공) + 몸통 주도 리버스 스로우 — 팔 힘 대신 몸통→팔 전달을 키워 같은 구속을 더 낮은 팔 부담으로',
+    blockConvEff: '앞다리 제동 직후 골반→몸통 회전이 바로 이어지도록 안티로테이션 홀드 후 폭발적 회전 — 받아 멈춘 뒤 몸통·팔 넘기기',
+    armTransferRatio: '커넥션 볼(겨드랑이 공) + 몸통 주도 리버스 스로우 — 팔 힘 대신 몸통→팔 연결을 키워 같은 구속을 더 낮은 팔 부담으로',
     trunkRotKE: '발→골반→몸통 순서로 메디신볼 측면 회전 던지기 — 몸통 돌리기 에너지(축회전)를 키우기',
     trunkFlexKE: '메디신볼 다운워드 슬램 + 릴리스에서 갈비뼈를 홈으로 덮는 셰도우 — 앞으로 덮기 에너지 강화',
     trunkLatKE: '글러브측으로 기울이며 던지는 측면 틸트 셰도우 — 옆 기울이기로 팔 높이·릴리스 포인트 확보'
@@ -166,7 +166,7 @@
     var pJ=info.me_peak_pelvis_J, tJ=info.me_peak_trunk_J, hJ=info.me_peak_humerus_J;
     // (회전속도 막대 제거 — 회전속도는 '회전과 가속' 섹션에서 Theia best-trial 기준으로만 평가. 중복·집계불일치 방지)
     var mtable = (et&&et.metrics) ? '<div class="diag" style="background:#eef5ff;margin-bottom:8px"><b>에너지 전달 종합 '+(et.score!=null?et.score:'—')+'점</b> — 분절 역학에너지(ME) 흐름·시퀀스·전달 타이밍을 종합한 운동사슬 효율 점수입니다. (회전속도 자체는 \u2018회전과 가속\u2019에서 별도 평가하므로 여기서는 중복 제외)</div>'+'<table class="ev-table" style="margin-bottom:8px"><thead><tr><th class="evl">에너지 지표</th><th>측정</th><th>점수</th></tr></thead><tbody>'+et.metrics.map(function(m){var scol=m.score>=95?'#2f9e44':(m.score>=90?'#41506a':'#c0612b');return '<tr><td class="evl">'+m.label+(m.note?'<div style="font-size:11px;color:#7a8aa0;font-weight:400;margin-top:1px">'+m.note+'</div>':'')+'</td><td>'+_f(m.value)+(m.unit||'')+'</td><td><b style="color:'+scol+'">'+(m.score!=null?m.score:'—')+'</b></td></tr>';}).join('')+'</tbody></table>' : '';
-    var meLine = (pJ!=null&&tJ!=null&&hJ!=null) ? '<div class="diag" style="background:#f3f9f4;margin-bottom:8px"><b>분절 에너지 흐름(ME):</b> 골반 <b>'+pJ+'J</b> → 몸통 <b>'+tJ+'J</b> ('+_f(meAmp,2)+'\u00d7 증폭 — 몸통이 하지 에너지를 받아 회전 파워를 키움) → 상완 <b>'+hJ+'J</b>. 몸통→팔 전달효율 <b>'+(armT!=null?armT+'%':'—')+'</b> (상완은 대부분 몸통 회전으로 구동되는 채찍 끝). 골반→몸통은 몸통이 근육으로 에너지를 자체 생성하므로 \u2018전달비\u2019 대신 순서·타이밍으로 평가합니다.</div>' : '';
+    var meLine = (pJ!=null&&tJ!=null&&hJ!=null) ? '<div class="diag" style="background:#f3f9f4;margin-bottom:8px"><b>분절 에너지 흐름(ME):</b> 골반 <b>'+pJ+'J</b> → 몸통 <b>'+tJ+'J</b> ('+_f(meAmp,2)+'\u00d7 증폭 — 몸통이 하지 에너지를 받아 회전 파워를 키움) → 상완 <b>'+hJ+'J</b>. 몸통→팔 기여비율 <b>'+(armT!=null?armT+'%':'—')+'</b> (상완은 대부분 몸통 회전으로 구동되는 채찍 끝). 골반→몸통은 몸통이 근육으로 에너지를 자체 생성하므로 \u2018전달비\u2019 대신 순서·타이밍으로 평가합니다.</div>' : '';
     var diag;
     var seqOk = seqPct!=null && seqPct>=80;
     if(seqOk) diag='12구 중 <b>'+seqPct+'%</b>가 골반→몸통→팔의 올바른 순서로, 분절 에너지가 근위에서 원위로 순차 전달되는 패턴이 잘 나타납니다. 골반→몸통 지연 <b>'+_f(ptL)+'ms</b> · 몸통→팔 지연 <b>'+_f(taL)+'ms</b> — 두 전이 모두 적정 타이밍 범위입니다.';
@@ -174,13 +174,15 @@
     return mtable + meLine
       +'<div class="seqkpi" style="display:flex;flex-direction:row;gap:8px">'
       +'<div class="sk" style="flex:1"><div class="sk-l">올바른 순서</div><div class="sk-v">'+(seqPct!=null?seqPct:'—')+'<u>%</u></div></div>'
-      +'<div class="sk" style="flex:1"><div class="sk-l">몸통→팔 전달</div><div class="sk-v">'+(armT!=null?armT:'—')+'<u>%</u></div></div>'
+      +'<div class="sk" style="flex:1"><div class="sk-l">몸통→팔 연결</div><div class="sk-v">'+(armT!=null?armT:'—')+'<u>%</u></div></div>'
       +'<div class="sk" style="flex:1"><div class="sk-l">ME 증폭(몸통/골반)</div><div class="sk-v">'+_f(meAmp,2)+'<u>×</u></div></div>'
       +'</div>'
       +'<div class="diag" style="margin-top:8px">'+diag+'</div>';
   }
 
-  function buildPlayerHTML(DATA) {
+  function buildPlayerHTML(DATA, opts) {
+    /* [2026-08-13 ③ P3 §10] 청중 A/B. A형=선수·코치용(기본·방법론·연구자정보 숨김·§11.3)·B형=연구자 내부용. 원점수 무변경. */
+    var _AUD = (opts && opts.audience === "B") ? "B" : "A";
     var player=DATA.player||{}, name=player.name||'선수';
     var hpa=DATA.hp_assessment||{}, dl=DATA.biomotion||{}, cmd=DATA.command||{}, vs=DATA.velo_summary||{};
     var ss=(DATA.session_summary||{}).kseq||{}, ce=dl.ceiling||{}, models=dl.models||{}, et=DATA.energy_transfer||null;
@@ -204,7 +206,7 @@
       _phStages.forEach(function(st){ if(st.key==='consistency')return; var role=_prChainRole(st.key,_prMot.type);
         (st.metrics||[]).forEach(function(m){ if(!m.key||m.neutral)return; var p=_bmPctl(m); if(p==null)return; if(p<33){ (role==='minor'?minor:core).push(m.label); } else if(p>67&&(role==='core'||role==='common')){ strongCore.push(m.label); } }); });
       var dt=null; var tr=_phStages.filter(function(s){return s.key==='transfer';})[0]; if(tr){var dm=(tr.metrics||[]).filter(function(x){return x.key==='driveType';})[0]; if(dm)dt=dm.value;}
-      var kneeSol=dt?(String(dt).indexOf('신전')>=0?'앞무릎 <b>신전-vault형(에너지 생성)</b> — 앞무릎을 펴며 만든 신전 에너지를 회전·릴리스로 잇는 패턴. 신전 타이밍·신전일 활용을 키우는 드릴 권장.':'앞무릎 <b>버팀-흡수형(강성 버팀)</b> — 굽은 앞다리 축으로 회전·흡수하는 패턴. 강성 버팀(붕괴 최소화)·선형→회전 전환을 강조.'):'';
+      var kneeSol=dt?(String(dt).indexOf('신전')>=0?'앞무릎 <b>신전-vault형(에너지 생성)</b> — 앞무릎을 펴며 만든 신전 에너지를 회전·릴리스로 잇는 패턴. 신전 타이밍·신전일 활용을 키우는 드릴 권장.':'앞무릎 <b>버팀-흡수형(강성 버팀)</b> — 굽은 앞다리 축으로 회전·흡수하는 패턴. 강성 버팀(붕괴 최소화)·받아 멈추고 몸통 넘기기를 강조.'):'';
       var focus=_prMot.type==='드라이브-주도형'?'핵심은 드라이브·블록 체인입니다. 회전 변인이 다소 낮아도 약점이 아니라 유형 특성일 수 있어요 — 드라이브·제동 효율을 끝까지 키우는 데 집중하세요.':_prMot.type==='회전-주도형'?'핵심은 분리(몸통 꼬임)·외회전·회전 속도·시퀀스입니다. 드라이브 변인이 낮아도 부차적이며, 회전 가속·타이밍·채찍 효율을 키우는 데 집중하세요.':'드라이브·회전이 균형적입니다 — 두 체인 모두 핵심이며, 더 낮은 쪽을 먼저 보강하세요.';
       function chips(a,c){return a.length?a.map(function(l){return '<span style="display:inline-block;background:'+c+'1f;color:'+c+';border:1px solid '+c+'55;border-radius:6px;padding:2px 8px;margin:2px;font-size:12px">'+l+'</span>';}).join(''):'<span style="color:#6b7787">해당 없음</span>';}
       return '<div class="card" style="margin-bottom:10px"><b>유형별 맞춤 솔루션 — '+_prMot.type+'</b><div class="lead" style="margin:4px 0 8px">'+focus+'</div>'
@@ -215,10 +217,14 @@
         +'<div class="lead" style="color:#8893a4;margin-top:4px">※ 유형은 우열이 아니라 동력 전략 — 부차 체인의 낮은 값은 결함이 아닐 수 있으니 핵심 체인부터 개선하세요.</div></div>';
     }
     var testDate=hpa.test_date||'';
+    // [F-001 2026-08-26 적대검증] 결측을 강점·정상·원인으로 단정 금지 — 데이터 가용성 게이트별 생성(무데이터=강점/처방 문구 0).
+    var _hasFit=!!(hpa && (hpa.overall_score!=null || (hpa.axes && hpa.axes.length)));
+    var _hasCmd=!!(cmd && (cmd.n>0 || cmd.score!=null || cmd.location_score!=null || cmd.mech_consistency!=null));
+    var _hasVelo=!!(vs && vs.n>0);
     var C={
-      intro:'체력 '+(hpa.overall_norm_pct!=null?(hpa.overall_norm_pct+'%ile(Driveline HS 대비·중앙 50)'):(hpa.overall_score!=null?hpa.overall_score+'점':'—'))+'입니다(구속 예측 아님). <b>추가 구속은 에너지 전달 효율</b>에서 나옵니다 — 아래 5단계 진단에서 약한 단계를 다듬는 것이 우선 과제입니다.',
-      fitness:'점프 파워는 또래 평균 이상으로 좋고, 최대근력·반응성을 더 키우면 하체에서 만드는 힘이 커집니다. 체력 자체보다 그 힘을 공으로 전달하는 <b>동작 효율</b>이 지금 더 큰 과제입니다.',
-      command:'동작은 비교적 일관적입니다. 릴리즈 포인트(공 놓는 위치)를 같은 타겟에 반복하는 연습으로 존 적중률을 끌어올릴 수 있습니다.',
+      intro:'체력 '+(hpa.overall_norm_pct!=null?(hpa.overall_norm_pct+'%ile(Driveline HS 대비·중앙 50)'):(hpa.overall_score!=null?hpa.overall_score+'점':'—'))+'입니다(구속 예측 아님). 아래 5단계 진단에서 약한 단계를 다듬는 것이 우선 과제입니다.'+(_hasVelo?' 일반적으로 <b>추가 구속은 에너지 전달 효율</b>에서 나옵니다.':''),
+      fitness:(_hasFit?'측정된 체력 항목은 아래 규준 대비 위치로 보세요. 체력이 만든 힘을 공으로 전달하는 <b>동작 효율</b>이 지금의 과제입니다.':'체력(VALD) 검사 데이터가 없습니다 — 검사 입력 시 규준 대비로 표시됩니다.'),
+      command:(_hasCmd?'릴리즈 포인트(공 놓는 위치)를 같은 타겟에 반복하는 연습으로 존 적중률을 끌어올릴 수 있습니다.':'제구(랩소도) 데이터가 없습니다 — 입력 시 로케이션 일관성·스트라이크율로 표시됩니다.'),
       closing:'이 리포트는 선수와 코치가 함께 보도록 핵심 분석을 정리한 버전입니다. 정밀 시계열·3D 진단은 분석가용 리포트를 참고하세요. 자가연습 포인트는 가이드이며, 정확한 교정은 코치와 함께 진행하세요.<br>※ 메카닉 점수 규준: 고교 우수투수 20명(Theia 마커리스+포스플레이트+랩소도) 기준 · 100점=엘리트 중앙값, 1 SD당 10점 · 절대 수행지표가 아닌 엘리트 대비 상대 위치입니다.'
     };
     // ── 에너지 전달 진단(메카닉 평가 대체) — 전역 ETDIAG 사용 ──
@@ -232,8 +238,8 @@
       windup:['준비 자세 (와인드업)','다리를 들고 몸에 힘을 모으는 단계예요. 여기서 던질 힘을 미리 저장합니다.'],
       xftiming:['골반·상체 비틀기 (몸통 꼬임)','골반과 상체를 서로 반대로 비틀어 고무줄처럼 감았다가, 알맞은 순간에 풀어 큰 힘을 냅니다.'],
       stride:['밀고 나가기 (드라이브)','뒷다리로 땅을 밀어 몸을 홈플레이트 쪽으로 보내며 전진하는 힘을 만듭니다.'],
-      blocking:['앞발로 멈추기 (블로킹)','내딛은 앞발로 전진을 딱 멈춰서, 앞으로 가던 힘을 회전하는 힘으로 바꿔 줍니다.'],
-      knee:['앞무릎으로 힘 올려보내기','앞무릎이 무너지지 않고 단단히 버텨야 땅에서 받은 힘이 골반 회전으로 잘 올라갑니다.'],
+      blocking:['앞발로 멈추기 (블로킹)','내딛은 앞발로 전진을 세게 받아 멈춰서, 그 위로 몸통과 팔이 앞으로 넘어가게 받쳐 줍니다.'],
+      knee:['앞무릎으로 버티기','앞무릎이 무너지지 않고 단단히 버텨야 앞으로 가던 기세를 받아 멈추는 받침이 섭니다.'],
       pelvistrunk:['골반 → 몸통으로 힘 키우기','골반이 만든 회전이 몸통으로 넘어가면서 더 큰 힘으로 증폭됩니다.'],
       trunk:['몸통에서 힘 만들기','몸통의 회전과 앞으로 굽히는 동작으로 투구에서 가장 큰 에너지를 만들어 냅니다.'],
       trunkarm:['몸통 → 팔로 넘기기','몸통이 만든 힘을 팔로 잘 넘겨주면, 팔은 덜 힘들게 더 빠른 공을 던질 수 있습니다.'],
@@ -256,7 +262,7 @@
       windup:'다리 들기에서 흔들림이 있거나 힘이 덜 모입니다. 한 발로 1~2초 멈춰 균형을 잡고, 상체를 무리하게 세우거나 일찍 골반을 열지 마세요.',
       xftiming:'골반·상체 분리를 착지(FC)까지 유지하지 못하거나 푸는 시점이 안 맞습니다. 더 크게 비틀기보다, 만든 분리를 착지 직후에 풀도록 타이밍을 맞추세요.',
       stride:'홈 쪽으로 가는 전진 힘이 부족합니다. 뒷다리로 땅을 더 밀어 보폭·전진속도를 키우되, 너무 넓게 디뎌 균형을 잃지는 마세요.',
-      blocking:'앞발로 전진을 멈추는 제동이 약하거나 늦습니다. 착지 직후 앞발을 강하게 디뎌 앞으로 가던 힘을 회전으로 빠르게 바꾸세요.',
+      blocking:'앞발로 전진을 멈추는 제동이 약하거나 늦습니다. 착지 직후 앞다리로 세게 받아 멈추고 몸통·팔을 앞으로 넘기세요.',
       knee:'앞무릎이 버티지 못하고 무너지거나, 받은 힘이 골반 회전으로 잘 안 넘어갑니다. 한 발 착지에서 무릎이 안쪽으로 무너지지 않게 단단히 버티는 연습을 하세요.',
       pelvistrunk:'골반 회전이 몸통으로 충분히 커지지 않습니다. 골반을 먼저 돌리고 몸통이 살짝 늦게 따라오는 순서를 지켜, 몸통이 골반 힘을 받아 증폭하게 하세요.',
       trunk:'몸통이 만드는 에너지가 부족합니다. 회전과 앞으로 굽힘을 함께 빠르게 써서 몸통 엔진을 더 키우세요(팔로 때우려 하지 마세요).',
@@ -273,8 +279,8 @@
       windup:'와인드업에서 만든 힘 모으기을 착지까지 유지하는 데 집중',
       xftiming:'꼬임을 더 크게 만들기보다 FC까지 유지하고 블로킹 이후 푸는 타이밍 맞추기',
       stride:'전진속도 자체보다 블로킹 가능한 전진 에너지를 홈 방향으로 안정적으로 만들기',
-      blocking:'앞발 착지 직후 빠르게 제동을 형성해 전진을 회전으로 전환',
-      knee:'앞다리가 받은 수직 힘을 골반 회전으로 즉시 연결(무릎 흡수·지연 줄이기)',
+      blocking:'앞발 착지 직후 빠르게 제동을 형성해 몸통·팔이 넘어갈 받침 만들기',
+      knee:'앞다리로 받은 힘을 버텨 받침을 빨리 세우기(무릎 흡수·지연 줄이기)',
       pelvistrunk:'골반 회전 직후 몸통이 늦지 않게 따라오도록 타이밍 맞추기',
       trunk:'팔을 더 쓰기보다 몸통 회전+굴곡 에너지 생산을 먼저 키우기',
       trunkarm:'몸통 힘 최고점 직후 어깨 안쪽 회전이 늦지 않게 연결해 몸통 힘을 팔로 넘기기',
@@ -305,7 +311,7 @@
       } else if(key==='blocking'){
         if(R.brakeImpulsePct!=null){name='앞발 제동 임펄스 '+R.brakeImpulsePct+' %BW·s'; desc='착지 후 앞발이 전진 에너지를 멈춘 누적 제동량(MAP score SSOT)';}
       } else if(key==='knee'){
-        if(R.kneeNegWork!=null){name='무릎 흡수일 '+R.kneeNegWork+' J'; desc='앞무릎이 받은 에너지 중 흡수돼 회전으로 못 이어진 부분';}
+        if(R.kneeNegWork!=null){name='무릎 흡수일 '+R.kneeNegWork+' J'; desc='앞무릎이 받아 멈추며 흡수한 에너지(브레이크 역할 — 많고 적음 자체가 손실의 크기는 아님)';}
         else if(R.kneeNetExt!=null){name='앞무릎 순신전 '+R.kneeNetExt+'°'; desc='착지 후 앞무릎이 펴진 각도(+면 vault, -면 굴곡)';}
       } else if(key==='pelvistrunk'){
         if(R.gapPelvisToTrunkVel!=null){name='골반→몸통 간격 '+R.gapPelvisToTrunkVel+' ms'; desc='골반 회전 속도 최고점에서 몸통 최고점까지 시간차(짧을수록 잘 전달 · 적정 30~60ms)';}
@@ -316,7 +322,7 @@
         if(R.armSelfReliance!=null){name='팔 의존도(ASR) '+R.armSelfReliance; desc='팔 속도 중 몸통 전달 없이 팔이 스스로 만든 비율(낮을수록 좋음)';}
         else if(R.trunkArmOverlap!=null){name='전달 맞물림 '+R.trunkArmOverlap; desc='몸통 힘 최고점과 팔 가속의 시간 겹침(많을수록 잘 넘김)';}
       } else if(key==='armball'){
-        if(R.elbowTorque!=null){name='팔꿈치에 걸리는 힘 최고 '+R.elbowTorque+' N·m'; desc='팔꿈치 안쪽 인대(UCL)에 가해지는 부담 — 높을수록 부상 위험';}
+        if(R.elbowTorque!=null){name='팔꿈치에 걸리는 힘 최고 '+R.elbowTorque+' N·m'; desc='팔꿈치 안쪽 인대(UCL)에 가해지는 부담 지표 — 개인 부상 위험은 검증된 부하 기준으로만 판정';}
         else if(R.shoulderTorque!=null){name='어깨 내회전 토크 peak '+R.shoulderTorque+' N·m'; desc='어깨 관절에 가해지는 부하';}
       }
       if(!name && s.status!=='good' && (STAGE_EZ[s.key]||[s.label||'',''])[0]){ name=(STAGE_EZ[s.key]||[s.label||'',''])[0]; desc=''; }
@@ -396,6 +402,20 @@
             +'<div style="font-size:13.5px;line-height:1.75;color:#2a3547;margin-top:7px">'+esc(STAGE_FIX[k]||'')+'</div>'
             +(STAGE_PRIO_LOCAL[k]?'<div style="font-size:13px;font-weight:700;color:'+a.col+';margin-top:7px">→ '+esc(STAGE_PRIO_LOCAL[k])+'</div>':'')
             +(STAGE_DRILL[k]?'<div style="font-size:12.5px;color:#1a7f5a;background:#e7f7ef;border-radius:7px;padding:8px 11px;margin-top:8px"><b>이렇게 연습하세요</b> · '+esc(STAGE_DRILL[k])+'</div>':'')
+            +(function(){ // [2026-07-11] 상류 원인 자동 제시(OBP within/between 인과지도·feedback_causemap.js) — additive
+                var cz=(typeof FEEDBACK_CAUSEMAP!=='undefined'&&FEEDBACK_CAUSEMAP.get)?FEEDBACK_CAUSEMAP.get(k):null; if(!cz)return '';
+                var ab={within_lever:['매투구 교정','#1f9d58'],archetype:['자세·폼(선수간)','#e8731a'],fitness:['체력(장기)','#2563eb'],info:['정보만','#8893a4']}[cz.actionability]||['','#8893a4'];
+                var cl=(cz.causes&&cz.causes.length)?('<div style="margin-top:3px"><b>상류 원인</b> · '+cz.causes.map(function(c){return esc(c.label)+'('+esc(c.conf)+')';}).join(' › ')+'</div>'):'';
+                var ft=cz.fitness?('<div style="margin-top:3px"><b>체력 기반</b> · '+esc(cz.fitness.name)+'</div>'):'';
+                var _tcC={check:['채점','#1f9d58'],range:['범위·관찰','#e8731a'],info:['정보','#8893a4']}, _lyC={within:'매투구',fitness:'체력',between:'폼',info:'정보'};
+                var clist=(cz.checklist&&cz.checklist.length)?('<div style="margin-top:6px;border-top:1px dashed #cfd8ea;padding-top:5px"><b style="color:#4a5bd8">확인 항목</b> <span style="font-size:10px;color:#8893a4">강점·관찰·보강 포인트</span>'
+                  +cz.checklist.map(function(q){var tc=_tcC[q.tier]||['','#8893a4'],ly=_lyC[q.layer]||'';
+                    return '<div style="margin-top:4px"><b>'+esc(q.v)+'</b> <span style="font-size:10px;font-weight:700;color:'+tc[1]+';border:1px solid '+tc[1]+';border-radius:4px;padding:0 5px">'+esc(tc[0])+'</span>'+(ly?' <span style="font-size:10px;color:#8893a4">'+esc(ly)+'</span>':'')
+                      +'<div style="color:#5a6880;line-height:1.5"><b style="color:#2f9e44">강점</b> '+esc(q.strong)+' · <b style="color:#e8731a">관찰</b> '+esc(q.watch)+' · <b style="color:#4a5bd8">보강</b> '+esc(q.reinforce)+'</div></div>';}).join('')
+                  +'</div>'):'';
+                return '<div style="font-size:12px;color:#41506a;background:#eef2fb;border-radius:7px;padding:8px 11px;margin-top:8px;line-height:1.6">'
+                  +'<b style="color:#4a5bd8">상류 원인 자동 제시</b> <span style="font-size:10px;font-weight:700;color:'+ab[1]+';border:1px solid '+ab[1]+';border-radius:4px;padding:1px 6px">'+esc(ab[0])+'</span> <span style="color:#8893a4">· OBP 데이터·순위/방향·가설</span>'
+                  +cl+(cz.message?('<div style="margin-top:3px">'+esc(cz.message)+'</div>'):'')+ft+clist+'</div>'; })()
             +'</div>'; }).join('')+'</div>')
         : '<div class="note" style="margin-bottom:10px">뚜렷한 약점이 없습니다 — 세 영역이 균형 잡혀 있습니다. 현재 패턴을 유지하세요.</div>';
       return corrPriorityH;
@@ -457,7 +477,7 @@
     var kpis=[
       kpi('구속 (최고/평균)', _f(vs.max_kmh)+'<u> km/h</u>','평균 '+_f(vs.avg_kmh)+' km/h','#e8731a'),
       kpi('회전수',(vs.avg_spin||'—')+'<u> rpm</u>','평균 spin','#1f9d8f'),
-      kpi((hpa.overall_norm_pct!=null?'체력 퍼센타일':'체력 점수'),(hpa.overall_norm_pct!=null?(hpa.overall_norm_pct+'<u>%ile</u>'):(hpa.overall_score!=null?hpa.overall_score+'<u> /100</u>':'—')),(hpa.overall_norm_pct!=null?'Driveline HS 대비(중앙 50)':'6축 종합 (악력·최대힘·파워·반응성)'),'#2f9e44'),
+      kpi((hpa.overall_norm_pct!=null?'체력 퍼센타일':'체력 점수'),(hpa.overall_norm_pct!=null?(hpa.overall_norm_pct+'<u>%ile</u>'):(hpa.overall_score!=null?hpa.overall_score+'<u> /100</u>':'—')),(hpa.overall_norm_pct!=null?'Driveline HS 대비(중앙 50)':'종합 (근력·파워·반응성 = Driveline 검증축 · 악력은 자체 코호트 참고·OBP 미검증)'),'#2f9e44'),
       kpi('메카닉 점수',(_effForKpi!=null?_effForKpi:'—')+'<u> /100</u>','5단계 종합 점수','#1f9d58'),
       kpi('핵심 누수',esc((_worstAll6()||{}).name||'없음'),'5단계 중 가장 약한 단계','#c0612b')
     ].join('');
@@ -509,7 +529,33 @@
       +'.dashbackbtn{background:#fff;color:#1b2330;border:1px solid #c5d0de;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.1);font-family:inherit}'
       +'.dashbackbtn:hover{border-color:#1f6feb;color:#1f6feb}'
       +'.pdfbtn{background:#e8731a;color:#fff;border:none;border-radius:8px;padding:9px 15px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.18);font-family:inherit}'
-      +'body{padding-top:52px}';
+      +'body{padding-top:52px}'
+      /* [2026-07-19 리포트 개선] 목업 라이트 토큰 + 헤더/오늘의핵심/에너지흐름 6정거장 */
+      +':root{--r-ink:#1A2233;--r-ink2:#3B475E;--r-muted:#68748C;--r-faint:#93A0B5;--r-line:#E4E9F1;--r-panel:#F7F9FC;--r-teal:#12907F;--r-good:#149467;--r-warn:#B07A12;--r-bad:#CE4A3C}'
+      +'.eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--r-teal);text-transform:uppercase;margin-bottom:4px}'
+      +'.rhead{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--r-line);padding-bottom:12px;margin-bottom:6px}'
+      +'.rhead h1{font-size:26px;margin:0;color:var(--r-ink)}.rhead .rtag{font-size:14px;font-weight:600;color:var(--r-muted);margin-left:8px}'
+      +'.rhead .rsub{font-size:12px;color:var(--r-muted);margin-top:5px}'
+      +'.velo-big{text-align:right;white-space:nowrap}.velo-big .vl{font-size:11px;color:var(--r-muted);letter-spacing:.04em}.velo-big .vv{font-size:34px;font-weight:800;color:var(--r-ink);line-height:1.05}.velo-big .vu{font-size:13px;color:var(--r-muted);font-weight:600;margin-left:2px}'
+      +'.keybox{background:var(--r-panel);border-left:4px solid var(--r-teal);border-radius:8px;padding:12px 16px;margin:14px 0 18px}.keybox .kh{font-size:11px;font-weight:800;color:var(--r-teal);margin-bottom:4px}.keybox .kt{font-size:13.5px;color:var(--r-ink2);line-height:1.6}'
+      +'.sec-h{font-size:15px;font-weight:800;color:var(--r-ink);margin:18px 0 9px}.sec-h .sh-sub{font-size:12px;font-weight:500;color:var(--r-muted);margin-left:8px}'
+      +'.eflow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}'
+      +'.eflow-st{background:var(--r-panel);border:1px solid var(--r-line);border-top:3px solid var(--stc,var(--r-teal));border-radius:9px;padding:11px 8px 12px;text-align:center;page-break-inside:avoid}'
+      +'.eflow-n{font-size:12px;font-weight:800;color:var(--r-faint)}.eflow-name{font-size:12.5px;font-weight:700;color:var(--r-ink);margin:3px 0 8px}'
+      +'.eflow-pill{display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:2px 11px}'
+      +'.eflow-pill.good{background:rgba(20,148,103,.12);color:var(--r-good)}.eflow-pill.warn{background:rgba(176,122,18,.15);color:var(--r-warn)}.eflow-pill.bad{background:rgba(206,74,60,.12);color:var(--r-bad)}'
+      +'.rtiles{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}'
+      +'.rtile{background:var(--r-panel);border:1px solid var(--r-line);border-top:2px solid var(--r-teal);border-radius:9px;padding:10px 11px;page-break-inside:avoid}.rtile .rl{font-size:11px;color:var(--r-muted)}.rtile .rv{font-size:21px;font-weight:800;color:var(--r-ink);line-height:1.1;margin-top:2px}.rtile .rv u{font-size:11px;color:var(--r-muted);font-weight:600;font-style:normal;margin-left:2px}.rtile .rs{font-size:10.5px;color:var(--r-faint);margin-top:2px}'
+      +'.issue{background:var(--r-panel);border:1px solid var(--r-line);border-left:4px solid var(--isc,var(--r-teal));border-radius:9px;padding:12px 15px;margin:10px 0;page-break-inside:avoid}'
+      +'.issue-top{display:flex;align-items:center;gap:9px;margin-bottom:8px}.issue-badge{flex:none;width:22px;height:22px;border-radius:50%;background:var(--isc,var(--r-teal));color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}'
+      +'.issue-title{flex:1;font-size:14px;font-weight:700;color:var(--r-ink)}.issue-stage{flex:none;font-size:11px;font-weight:700;color:var(--isc,var(--r-teal));background:var(--r-panel2);border:1px solid var(--r-line);border-radius:999px;padding:2px 10px}'
+      +'.issue-row{display:flex;gap:10px;font-size:12px;line-height:1.5;margin:3px 0}.issue-row .k{flex:none;width:66px;font-size:11px;font-weight:700;color:var(--r-faint)}.issue-row .v{flex:1;color:var(--r-ink2)}'
+      +'.vsec{background:var(--r-panel);border:1px solid var(--r-line);border-radius:10px;padding:14px 16px;margin-top:4px;page-break-inside:avoid}.vsec .vsub{font-size:12px;color:var(--r-muted);margin-bottom:13px;line-height:1.55}'
+      +'.vbars{display:grid;grid-template-columns:1fr 1fr;gap:11px 24px}.vbar{display:grid;grid-template-columns:96px 1fr 42px;gap:9px;align-items:center}'
+      +'.vbar-lbl{font-size:12px;font-weight:700;color:var(--r-ink);line-height:1.2}.vbar-u{font-size:10px;color:var(--r-faint)}'
+      +'.vbar-track{position:relative;height:9px;background:var(--r-panel2);border-radius:5px}.vbar-fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px}.vbar-tick{position:absolute;left:50%;top:-2px;bottom:-2px;width:2px;background:var(--r-faint);opacity:.55}'
+      +'.vbar-rank{font-size:11px;font-weight:800;text-align:right}'
+      +'.rfoot{font-size:11px;color:var(--r-muted);line-height:1.6;border-top:1px solid var(--r-line);padding-top:10px;margin-top:20px}';
     var DASH_BACK_SCRIPT = '<script>function bmBackToDashboard(){try{if(window.opener&&!window.opener.closed){window.opener.focus();window.close();return;}}catch(e){}var u=null;try{u=sessionStorage.getItem("bm_dash_return");}catch(e2){}if(u){location.href=u;return;}alert("대시보드 탭을 직접 선택하거나, 대시보드를 다시 열어 주세요.");}<\/script>';
     var DASH_BACK_BAR = '<div class="pr-topbar noprint"><button type="button" class="dashbackbtn" onclick="bmBackToDashboard()">← 대시보드로</button>'
       +'<button type="button" class="pdfbtn" onclick="window.print()">PDF로 저장 / 인쇄</button></div>';
@@ -626,27 +672,169 @@
     var _drillSection=_drillH?('<div style="margin-top:6px"><div style="font-size:13px;font-weight:800;margin-bottom:8px">단계별 세부 점수 · 측정치</div><div class="lead" style="margin:-2px 0 8px">각 단계의 핵심 변인을 원인→과정→결과 순으로, 측정치와 진단(양호·주의·누수)을 함께 표시합니다.</div>'+_drillH+'</div>'):'';
     // 메카닉 점수 바로 다음 — 투수 에너지 흐름(골반→몸통→팔 ME) + 전달 종합 점수
     var _gmet=function(k){ var r=null; ((DATA.phases&&DATA.phases.stages)||[]).forEach(function(s){(s.metrics||[]).forEach(function(m){if(m.key===k)r=m;});}); return r; };
-    var _extraSeq=[['vgrfPattern','바닥 미는 힘 유지 패턴'],['ppKneeTrunk','무릎→몸통 파워 타이밍'],['ppTrunkHum','몸통→상완 파워 타이밍'],['ppShoElb','어깨→팔꿈치 파워 타이밍']].map(function(x){var m=_gmet(x[0]);return (m&&m.value!=null)?(x[1]+' <b>'+m.value+(m.unit||'')+'</b>'):'';}).filter(Boolean).join(' · ');
+    var _extraSeq=[['vgrfPattern','바닥 미는 힘 유지 패턴'],['ppKneeTrunk','앞무릎 관절 파워·몸통 에너지 변화율 정점 시간차'],['ppTrunkHum','몸통·상완 에너지 변화율 정점 시간차'],['ppShoElb','어깨·팔꿈치 관절 파워 정점 시간차']].map(function(x){var m=_gmet(x[0]);return (m&&m.value!=null)?(x[1]+' <b>'+m.value+(m.unit||'')+'</b>'):'';}).filter(Boolean).join(' · ');
     var _extraLine=_extraSeq?'<div class="diag" style="background:#f6f7f9;font-size:11.5px;margin-top:6px"><b>추가 전달 지표(참고 · 코호트 위치, 우열 아님):</b> '+_extraSeq+' — 파워 정점 순서·타이밍과 앞발 수직힘 패턴(파워 기준은 속도 시퀀스와 다를 수 있음).</div>':'';
     var _energyFlowSection=(et&&(et.metrics||et.info))?('<div style="margin-top:12px"><div style="font-size:13px;font-weight:800;margin-bottom:6px">투수 에너지 흐름 <span style="font-weight:500;color:#7a8aa0">골반 → 몸통 → 팔 분절 에너지(ME) · 전달 종합</span></div>'+energyBlock(et,ss)+_extraLine+'</div>'):'';
     var mechFigH = _figH
       +'<div class="two" style="margin-bottom:10px"><div class="card">'+mechRadar+'<div class="legend">5단계 메카닉 점수</div></div>'
       +'<div class="card"><b>메카닉 흐름과 평가</b><div class="lead" style="margin-top:6px">'+_mechEval+'</div></div></div>';
 
-    return '<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>'+esc(name)+' 선수 리포트</title>'
+    /* [2026-07-11] Driveline 방식 평가 섹션 — 리포트 전용 매핑(리포트 키 네임스페이스·byk+_bmPctl 백분위). ★격리: Uplift/BBL 미이식·Driveline 원시값 미사용·표시 전용(점수 산식 무변경). React 뷰어 DrivelineTab과 짝(뷰어 키와 일부 상이: comVelReductionFCBR→comDecel, whipRatio 부재→armTransferRatio·ppTrunkHum·ppShoElb). */
+    var _drivelineSection=(function(){
+      if(!_phStages||!_phStages.length) return '';
+      var byk={}; _phStages.forEach(function(st){ if(st.key==='consistency')return; (st.metrics||[]).forEach(function(m){ if(m&&m.key)byk[m.key]=m; }); });
+      var MODELS=[
+        {en:'Posture',ko:'자세',rank:'Driveline 구속영향 1위',desc:'착지→릴리스 자세 유지 — 상하체 분리·몸통 열림·기울기',keys:['xfPeak','openAng','leanBack']},
+        {en:'CoG',ko:'무게중심',rank:'Driveline 구속영향 4위',desc:'몸 전체 이동·감속',keys:['comDecel','comVel']},
+        {en:'Rotation',ko:'회전',rank:'Driveline 구속영향 4위',desc:'몸통·골반 회전',keys:['torsoRotV','pelvisRotV']},
+        {en:'Block',ko:'블록',rank:'Driveline 구속영향 5위',desc:'앞다리로 전방 운동량 차단·버팀',keys:['kneeExtROM','strideLen']},
+        {en:'Arm Action',ko:'팔 동작',rank:'코킹·릴리스·방출',desc:'어깨 최대외회전·원위 전달(전달비·분절 파워)',keys:['merPk','armTransferRatio','ppTrunkHum','ppShoElb']}
+      ];
+      var anyRow=false;
+      var cards=MODELS.map(function(mo){
+        var pcs=mo.keys.map(function(k){ return byk[k]; }).filter(function(m){ return m&&!m.neutral; }).map(function(m){ return {m:m,p:_bmPctl(m)}; }).filter(function(x){ return x.p!=null; });
+        var strong=pcs.filter(function(x){ return x.p>=67; }).length, weak=pcs.filter(function(x){ return x.p<=33; }).length;
+        var vb = pcs.length===0 ? {t:'정보',c:'#8893a4'} : (weak>=1&&weak>=strong ? {t:'보강',c:'#c0612b'} : (weak===0&&strong>=1 ? {t:'강점',c:'#2f9e44'} : {t:'관찰',c:'#e8731a'}));
+        if(pcs.length)anyRow=true;
+        var rows=pcs.length?pcs.map(function(x){ var c=x.p>=67?'#2f9e44':(x.p<=33?'#c0612b':'#e8731a'), t=x.p>=67?'강점':(x.p<=33?'보강':'관찰'), nm=MET_KO[x.m.key]||((typeof _ezLabel==='function')?_ezLabel(x.m.label):x.m.label);
+          return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:4px 0;border-top:1px solid #eef2f7"><span style="font-size:12.5px;color:#2a3547">'+esc(nm)+'</span><span style="display:flex;gap:9px;align-items:baseline"><span style="font-size:12px;color:#41506a">'+_f(x.m.value)+(x.m.unit||'')+'</span><span style="font-size:11px;font-weight:700;color:'+c+'">'+x.p+'p · '+t+'</span></span></div>';
+        }).join(''):'<div style="font-size:11.5px;color:#8893a4;padding:3px 0">이 측정엔 해당 모델 변인이 없습니다.</div>';
+        return '<div style="border:1px solid #e3e9f0;border-left:4px solid '+vb.c+';border-radius:9px;padding:10px 13px;margin-bottom:8px;page-break-inside:avoid"><div style="display:flex;align-items:baseline;gap:8px"><b style="font-size:14px">'+mo.en+'</b> <span style="font-size:11.5px;color:#6b7787">'+mo.ko+'</span><span style="margin-left:auto;font-size:11px;font-weight:700;color:'+vb.c+';border:1px solid '+vb.c+'66;border-radius:20px;padding:1px 10px">'+vb.t+'</span></div><div style="font-size:10.5px;color:#b7860b;margin-top:1px">'+mo.rank+'</div><div style="font-size:11.5px;color:#6b7787;margin:2px 0 4px">'+mo.desc+'</div>'+rows+'</div>';
+      }).join('');
+      if(!anyRow) return '';
+      return '<div class="card" style="margin-bottom:10px;page-break-inside:avoid"><b>Driveline 방식 평가 <span style="font-size:12px;color:#6b7787;font-weight:400">Mechanical Composite · 5모델 매핑</span></b>'
+        +'<div class="lead" style="margin:4px 0 8px">Driveline 역학 복합 평가(Posture·CoG·Rotation·Block·Arm Action) 틀을 우리 테이아 변인·코호트 백분위로 매핑했습니다. 강점(≥67p)·관찰·보강(≤33p) 방향으로 읽으며, 점수 산식은 바뀌지 않습니다. Driveline 원시 점수·엘리트 값은 좌표계가 달라 그대로 비교하지 않고 순위·방향만 봅니다(Est. Ceiling·Per 1mph는 개념만).</div>'
+        +cards+'</div>';
+    })();
+
+    // [2026-07-19 리포트 개선] 목업 상단 헬퍼 (표시전용·판정권 무관)
+    var _stageCol=function(cat){return cat==='store'?'#7048E8':(cat==='gen'?'#2563EB':(cat==='transfer'?'#12907F':'#C97E2E'));};
+    var _handLabel=(function(){var h=(player.hand||player.handedness||(DATA.handedness_check&&DATA.handedness_check.hand)||'').toString().toUpperCase();return h.indexOf('L')===0?'좌완':(h.indexOf('R')===0?'우완':(h||''));})();
+    var _pitchN=(vs.n||cmd.n||(DATA.trials?DATA.trials.length:null)||null);
+    var _eflowStrip='<div class="eflow">'+_PH6.map(function(p){var sw=(p.status==='good'?'양호':(p.status==='bad'?'결함':'주의'));return '<div class="eflow-st" style="--stc:'+_stageCol(p.cat)+'"><div class="eflow-n">'+p.n+'</div><div class="eflow-name">'+esc(p.name)+'</div><span class="eflow-pill '+p.status+'">'+sw+'</span></div>';}).join('')+'</div>';
+    var _rheadSub=esc(testDate)+' 측정'+(_handLabel?' · '+_handLabel:'')+(_pitchN!=null?' · 투구 '+_pitchN:'')+' · 정밀 마커리스 동작';
+    var _rtile=function(l,v,u,s){var e=(v==null||v==='');return '<div class="rtile"><div class="rl">'+l+'</div><div class="rv">'+(e?'—':v)+((u&&!e)?'<u>'+u+'</u>':'')+'</div>'+(s?'<div class="rs">'+s+'</div>':'')+'</div>';};
+    var _rtiles='<div class="rtiles">'+_rtile('구속 최고',(vs.max_kmh!=null?_f(vs.max_kmh):null),'km/h','평균 '+(vs.avg_kmh!=null?_f(vs.avg_kmh):'—'))+_rtile('회전수',(vs.avg_spin!=null?vs.avg_spin:null),'rpm','평균 spin')+_rtile('회전효율',(vs.avg_eff!=null?vs.avg_eff:null),'%','Active Spin')+_rtile('회전축',(vs.spin_dir||null),'시','변화 방향')+_rtile('구종',(vs.pitch_types?Object.keys(vs.pitch_types).length:null),'종',(vs.n||0)+'구 측정')+'</div>';
+    // 핵심 문제 카드 (FEEDBACK_SUMMARY.keyIssues 직결 · 판정권 무관·표시전용)
+    var _keyIssuesSection=(function(){
+      var _FS=(typeof FEEDBACK_SUMMARY!=='undefined'&&FEEDBACK_SUMMARY)||(typeof feedbackSummary!=='undefined'&&typeof feedbackSummary==='object'&&feedbackSummary)||null;
+      var ki=(_FS&&_FS.keyIssues)||null; if(!ki||!ki.length)return '';
+      var PC={windup:'store',stride:'gen',drive:'gen',block:'transfer',blocking:'transfer',knee:'transfer',trunk:'gen',arm:'transfer',armball:'transfer'};
+      var cards=ki.slice(0,2).map(function(k,i){
+        var col=_stageCol(PC[k.phase]||'gen'), rows='';
+        if(k.eventWindow&&k.eventWindow.label) rows+='<div class="issue-row"><span class="k">구간</span><span class="v">'+esc(k.eventWindow.label)+'</span></div>';
+        if(k.why) rows+='<div class="issue-row"><span class="k">왜</span><span class="v">'+esc(k.why)+'</span></div>';
+        if(k.downstreamImpact) rows+='<div class="issue-row"><span class="k">다음 단계</span><span class="v">'+esc(k.downstreamImpact)+'</span></div>';
+        var rm=(k.relatedMetricsKo&&k.relatedMetricsKo.length)?k.relatedMetricsKo.join(' · '):((k.relatedMetrics&&k.relatedMetrics.length)?k.relatedMetrics.join(' · '):'');
+        if(rm) rows+='<div class="issue-row"><span class="k">관련 지표</span><span class="v">'+esc(rm)+'</span></div>';
+        return '<div class="issue" style="--isc:'+col+'"><div class="issue-top"><span class="issue-badge">'+(i+1)+'</span><span class="issue-title">'+esc(k.title||k.problem||'')+'</span>'+(k.phaseLabel?'<span class="issue-stage">'+esc(k.phaseLabel)+'</span>':'')+'</div>'+rows+'</div>';
+      }).join('');
+      return '<div class="sec-h">핵심 문제 <span class="sh-sub">최대 2개 · 오늘 집중</span></div>'+cards;
+    })();
+    // 체력 VALD 막대 (규준 대비 · 표시전용·판정권 무관) — hp_assessment.axes 직결
+    var _valdBars=(function(){
+      var ax=(hpa.axes||[]).filter(function(a){return a.key!=='upper_power';});
+      if(!ax.length)return '<div class="note">체력(VALD) 측정 데이터 없음 — 검사 입력 시 규준 대비 막대로 표시됩니다.</div>';
+      var tier=function(p){return p==null?['—','var(--r-faint)']:(p<34?['하위','var(--r-bad)']:(p<67?['중위','#C97E2E']:['상위','var(--r-good)']));};
+      return '<div class="vbars">'+ax.map(function(a){
+        var pct=(a.norm_pct!=null?a.norm_pct:(a.score!=null?a.score:null)), t=tier(pct), w=(pct!=null?Math.max(3,Math.min(100,pct)):0);
+        var sub=(a.sub_kr||a.sub||a.test||a.axis||'');
+        return '<div class="vbar"><div><div class="vbar-lbl">'+esc(a.label_kr||a.axis||'')+'</div>'+(sub?'<div class="vbar-u">'+esc(sub)+'</div>':'')+'</div><div class="vbar-track"><div class="vbar-fill" style="width:'+w.toFixed(0)+'%;background:'+t[1]+'"></div><div class="vbar-tick"></div></div><div class="vbar-rank" style="color:'+t[1]+'">'+t[0]+'</div></div>';
+      }).join('')+'</div>';
+    })();
+    var _rfootnote='<div class="rfoot"><b>해석 한계 · 반증 고려</b><br>'
+      +'· 에너지 흐름 = 병목·방향 진단이며 전달량·개인 인과가 아님. 구속 관계는 미검증 꼬리표(측정계 차이·본 데이터 재확인 전 인과 단정 금지).<br>'
+      +'· 종합 점수를 쓰지 않고 단계별 역할로 봄. 규준은 수동 발행이며 코호트 값 범위 겹침 확인 후 백분위 해석.<br>'
+      +'· 측정 출처·가용성은 위 「측정 기준」 표 참조(채널별·실제 데이터 유무). 상세 근거(이벤트·시간창·시행별 파형·자료 품질·대안 해석)는 대시보드 분석 모드 「근거 작업대」에서 확인.</div>';
+    /* [2026-08-14 ③ R-P1-3·Codex P1-3] B형 확대: 측정기준·단계별 변인표·연구자 판정(localStorage)·해석 한계. 가용 데이터만·없는 값(이벤트/필터 파라미터/per-metric 반증)은 근거 작업대로 안내. */
+    var _bResearch = (_AUD!=="B") ? "" : (function(){
+      var _mh='style="font-weight:800;font-size:12.5px;margin:2px 0 6px;color:#2a3550"';
+      /* [2026-08-14 C-P0-2] provenance: 채널→장비 고정(시스템 설계·지표키 추정 아님)·가용성만 실제 데이터 유무. 구속·구질=Rapsodo(velo_summary), 체력=VALD(hp_assessment), 동작=Theia. 지면반력은 세션별(단계 변인표 자료없음 표기 참조). */
+      var _pvVelo=!!(vs && (vs.n||0) > 0);
+      var _pvFit=!!(hpa && (hpa.overall_score != null || (hpa.axes && hpa.axes.length)));
+      /* [2026-08-14 FR-3] 지면반력 가용성 SSOT: 명시 flag → trial.grf(fp1/fp2 peak) 실측 유무. korea 등 미측정 세션은 false. */ var _pvGrf=(function(){ if(DATA.grf_available===true) return true; if(DATA.grf_available===false) return false; try{ return (DATA.trials||[]).some(function(t){ var g=t&&t.grf; return !!(g&&((g.fp1&&g.fp1.peak_z_pct_bw!=null)||(g.fp2&&g.fp2.peak_z_pct_bw!=null))); }); }catch(e){ return false; } })();
+      var _basis='<div class="sec-h">연구자 참고 <span class="sh-sub">B형 · 내부용 · 선수·코치용(A형)에는 표시 안 함</span></div>'
+        +'<div class="card"><div '+_mh+'>측정 기준 · 원자료 <span class="sh-sub">채널별 출처 · 실제 가용성</span></div><table class="ev-table"><tbody>'
+        +'<tr><th class="evl">동작·메카닉</th><td>'+esc(DATA.system||"Theia")+'(마커리스 광학)</td></tr>'
+        +'<tr><th class="evl">구속·구질</th><td>'+(_pvVelo?'Rapsodo':'해당 측정 없음')+'</td></tr>'
+        +'<tr><th class="evl">체력</th><td>'+(_pvFit?'VALD':'해당 측정 없음')+'</td></tr>'
+        +'<tr><th class="evl">지면반력</th><td>'+(_pvGrf?'force plate 실측':'해당 측정 없음')+'</td></tr>'
+        +'<tr><th class="evl">사용 시행 수</th><td>'+((DATA.trials||[]).length)+' 구</td></tr>'
+        +'<tr><th class="evl">대표 시행</th><td>'+(DATA.best_trial_index||1)+' 번</td></tr>'
+        +'</tbody></table>'
+        +(_pvFit?('<div class="lead" style="margin-top:6px">체력(VALD) 자료가 있어 하체 출력·코어 안정성이 특정 단계 결함과 <b>연결될 가능성</b>을 함께 검토합니다(개인 인과 단정 아님 · 영상·재측정으로 확인).</div>'):'')
+        +'</div>';
+      var _rows='';
+      _phStages.forEach(function(st){ if(st.key==='consistency')return;
+        (st.metrics||[]).forEach(function(m){
+          var p=(typeof _bmPctl==='function')?_bmPctl(m):null;
+          _rows+='<tr><td>'+esc(_phClean(st))+'</td><td>'+esc(m.label||m.key||'')+'</td>'
+            +'<td>'+(m.value!=null?_f(m.value)+esc(m.unit||''):'—')+'</td>'
+            +'<td>'+(p!=null?p+' 백분위':'—')+'</td>'
+            +'<td>'+(m.neutral?'표시 전용(미검증)':(st.score!=null?'채점':'—'))+'</td></tr>';
+        });
+      });
+      var _mtab=_rows?('<div class="card"><div '+_mh+'>단계별 변인 · 값 · 단위 · 백분위</div><table class="ev-table"><thead><tr><th>단계</th><th>변인</th><th>값</th><th>백분위</th><th>상태</th></tr></thead><tbody>'+_rows+'</tbody></table></div>'):'';
+      var _verd=''; try{
+        /* [2026-08-14 FR-2] 표면 네임스페이스(dashboard·korea)+레거시 병합 후 player 필터. B리포트는 오프라인이라 sig 매칭 불가 → player 기준. */ var _stj=(function(){ if(typeof localStorage==='undefined') return {}; var out={}; try{ ['dashboard','korea'].forEach(function(sf){ var raw=localStorage.getItem('biomotion:review:theia:'+sf); if(raw){ var ob=JSON.parse(raw); for(var kk in ob){ out[kk]=ob[kk]; } } }); var lg=localStorage.getItem('biomotion:review:theia'); if(lg){ var lo=JSON.parse(lg); for(var k2 in lo){ if(out[k2]==null) out[k2]=lo[k2]; } } }catch(e){} return out; })();
+        var _KO={accept:"채택",hold:"보류",reject:"기각",check:"추가 확인"};
+        var _vr=''; Object.keys(_stj).forEach(function(k){ var r=_stj[k]; if(r&&r.player===name&&(r.status||r.note)){
+          _vr+='<tr><td>'+esc(r.finding||'')+'</td><td>'+(r.status?(_KO[r.status]||r.status):'메모')+'</td><td>'+esc(r.reviewer||'')+'</td><td>'+esc(r.ts||'')+'</td><td>'+esc(r.note||'')+'</td></tr>';
+        }});
+        _verd=_vr?('<div class="card"><div '+_mh+'>연구자 판정 · 메모 <span class="sh-sub">자동 판정 검토에 저장된 항목</span></div><table class="ev-table"><thead><tr><th>발견</th><th>판정</th><th>판정자</th><th>시각</th><th>메모</th></tr></thead><tbody>'+_vr+'</tbody></table></div>'):'';
+      }catch(e){ _verd=''; }
+      return _basis+_mtab+_verd;
+    })();
+    // ── [2026-08-12] 하체·상체 활용 점수판 (lower_body_util · 선수·코치용 0-100) — 라이브 HTML/PDF 리포트 ──
+    var _lbUtilH='';
+    try{
+      if(typeof LOWER_BODY_UTIL!=='undefined'&&LOWER_BODY_UTIL.assess){
+        var _lb=null,_up=null; try{_lb=LOWER_BODY_UTIL.assess(DATA,ET);}catch(e){} try{_up=LOWER_BODY_UTIL.assessUpper(DATA,ET);}catch(e){}
+        var _mc=(_phComp!=null)?_phComp:null;
+        var _cc={good:'#2f9e44',partial:'#2563eb',transfer:'#e8731a',na:'#8893a4'};
+        var _tiles=[];
+        if(_mc!=null)_tiles.push({t:'메카닉 종합',v:_mc,s:'5단계 평균',c:_mc>=75?'good':(_mc>=60?'partial':'transfer')});
+        if(_lb&&_lb.index!=null)_tiles.push({t:'하체 활용',v:_lb.index,s:_lb.label,c:_lb.labelClass});
+        if(_up&&_up.index!=null)_tiles.push({t:'상체 전달',v:_up.index,s:_up.label,c:_up.labelClass});
+        if(_tiles.length || (_lb&&_lb.lbuScores)){
+          var _tileH=_tiles.map(function(x){var col=_cc[x.c]||'#2563eb';return '<div style="flex:1 1 150px;min-width:140px;background:#f6f8fb;border:1px solid #e3e9f0;border-top:4px solid '+col+';border-radius:10px;padding:11px 13px;text-align:center"><div style="font-size:11px;color:#6b7787;font-weight:700">'+x.t+'</div><div style="font-size:30px;font-weight:800;color:'+col+';line-height:1.1;margin:3px 0">'+x.v+'<span style="font-size:12px;color:#8893a4;font-weight:600">/100</span></div><div style="font-size:11px;color:'+col+';font-weight:700">'+esc(x.s)+'</div></div>';}).join('');
+          // [2026-08-13 ①b] 하체 3독립 raw J(중립·미검증) 카드 — 우열 종합점수·라벨 미표시(#58)
+          function _lbuRawCards(sc){ if(!sc)return ''; function card(x){ if(!x)return ''; var vJ=(x.rawJ!=null?x.rawJ+' J':'—'), vK=(x.jkg!=null?' · '+x.jkg+' J/kg':''); return '<div style="flex:1 1 150px;min-width:140px;background:#fff;border:1px solid #e8edf3;border-top:3px solid #8893a4;border-radius:8px;padding:8px 10px"><div style="font-size:11px;font-weight:800;color:#1b2330">'+esc(x.title)+'</div><div style="font-size:18px;font-weight:800;color:#41506a;margin:2px 0">'+vJ+'<span style="font-size:10px;color:#8893a4;font-weight:600">'+vK+'</span></div><div style="font-size:10px;color:#8893a4">검증 전 · 원시값</div></div>'; } return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">'+card(sc.driveGen)+card(sc.blockGen)+card(sc.blockAbsorb)+'</div>'; }
+          function _roleRows(A){ if(!A||!A.roles)return ''; var RC={good:'#2f9e44',ok:'#2563eb',weak:'#e8731a',na:'#8893a4'};
+            return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">'+A.roles.map(function(r){var c=RC[r.status]||'#8893a4',st=(A.statusKo&&A.statusKo[r.status])||r.status; var rt=(r.rows||[]).filter(function(z){return z.w;}).map(function(z){return esc(z.label)+' '+esc(z.w);}).join(' · '); return '<div style="flex:1 1 150px;min-width:140px;background:#fff;border:1px solid #e8edf3;border-top:3px solid '+c+';border-radius:8px;padding:7px 9px"><div style="font-size:11px;font-weight:800;color:#1b2330">'+esc(r.label)+' <span style="color:'+c+'">'+st+'</span>'+(r._score!=null&&r.status!=='na'?' <span style="color:#8893a4;font-weight:600">'+r._score+'</span>':'')+'</div><div style="font-size:10px;color:#6b7787;margin-top:3px;line-height:1.45">'+(rt||'자료 없음')+'</div></div>';}).join('')+'</div>'; }
+          _lbUtilH='<div class="card" style="margin-bottom:10px;page-break-inside:avoid"><div style="font-size:13px;font-weight:800;margin-bottom:2px">하체·상체 활용 점수판 <span style="font-size:11px;color:#8893a4;font-weight:600">메카닉 종합=5단계 · 상체=에너지 활용(mech 독립) · 하체=검증 전 원시값(J)</span></div>'
+            +'<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:9px">'+_tileH+'</div>'
+            +((_lb&&_lb.lbuScores)?('<div style="margin-top:11px;font-size:12px;font-weight:800;color:#41506a">하체 활용 — 검증 전(원시값)</div><div class="lead" style="margin:3px 0 0;font-size:12px">'+esc(_lb.summary)+'</div>'+_lbuRawCards(_lb.lbuScores)):'')
+            +(_up?('<div style="margin-top:12px;font-size:12px;font-weight:800;color:#41506a">상체 전달 — '+esc(_up.label)+'</div><div class="lead" style="margin:3px 0 0;font-size:12px">'+esc(_up.summary)+'</div>'+_roleRows(_up)):'')
+            +'</div>';
+        }
+      }
+    }catch(e){ _lbUtilH=''; }
+    var _out = '<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>'+esc(name)+' 선수 리포트</title>'
       +'<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet"><style>'+CSS+'</style>'
       +DASH_BACK_SCRIPT+'</head><body>'
       +DASH_BACK_BAR+'<div class="wrap">'
-      +'<h1>'+esc(name)+' 선수 투구 리포트</h1><div class="sub">국민대학교 바이오메카닉스 연구실 · 측정일 '+esc(testDate)+' · '+(player.height_m||'')+'m / '+(player.weight_kg||'')+'kg</div>'
-      +'<h2>한눈에 보기</h2><div class="kpis">'+kpis+'</div><div class="note">'+C.intro+'</div>'
-      +'<h2>① 체력 (점프·근력 검사)</h2><div class="lead">100점 = 엘리트 기준. 주황 면적이 넓을수록 좋고, 파란 점선은 엘리트 목표선입니다(구속 환산 없음).</div>'
-      +'<div class="two"><div class="card">'+fitRadar+'<div class="legend"><i style="background:#e8731a"></i>'+esc(name)+' &nbsp; <i style="background:#1f6feb;height:0;border-top:2px dashed #1f6feb"></i>엘리트 기준(100)</div></div>'
-      +'<div><div class="card"><b>체력 종합 '+(hpa.overall_score!=null?hpa.overall_score:'—')+'점</b><div class="lead" style="margin-top:6px">'+C.fitness+'</div></div></div></div>'+fitTrain
+      +'<div class="rhead"><div><div class="eyebrow">BIOMOTION · THEIA 피칭</div><h1>'+esc(name)+'<span class="rtag">투구 리포트</span><span class="rtag" style="margin-left:6px;background:'+(_AUD==="B"?"#7059aa":"#2f9e44")+';color:#fff">'+(_AUD==="B"?"B형 · 연구자 내부용":"A형 · 선수·코치용")+'</span></h1><div class="rsub">'+_rheadSub+'</div></div>'
+      +'<div class="velo-big"><div class="vl">최고 구속</div><div><span class="vv">'+(vs.max_kmh!=null?_f(vs.max_kmh):'—')+'</span><span class="vu">km/h</span></div>'
+      /* [케이랩 차용 B·2026-08-26] 지표 정의문 — 큰 숫자 아래 2줄(무엇을 재나·왜 중요한가). 새 산식 없음. */
+      +'<div style="font-size:10.5px;color:var(--r-muted);line-height:1.45;max-width:190px;margin-left:auto;margin-top:4px">손을 떠난 순간 공의 속도(결과 지표). 추가 구속은 대개 에너지 전달 효율에서 나옵니다.</div></div></div>'
+      +'<div class="keybox"><div class="kh">오늘의 핵심</div><div class="kt">'+C.intro+'</div></div>'
+      /* [케이랩 차용 A·2026-08-26] 퍼포먼스 유형 정보 라벨 — 리포트 고유 taxonomy(_prMot 동력 전략) 재사용·새 산식 없음. ★판정·티어 아님(§4-⑤). */
+      +(_prMot?('<div style="margin:8px 0;padding:9px 13px;border:1px solid #e2e6ec;border-radius:10px;background:#f7f8fa"><span style="color:#8893a4;font-size:11px;text-transform:uppercase;letter-spacing:.04em">퍼포먼스 유형 · 정보 라벨(판정 아님)</span><div style="margin-top:3px"><b style="color:#1b2330;font-size:15px">'+esc(_prMot.type)+'</b> <span style="color:#8893a4;font-size:12px">— 동력 전략 프로필일 뿐 우열·등급이 아닙니다</span></div></div>'):'')
+      +'<div class="sec-h">에너지 흐름 지도 <span class="sh-sub">저장 → 생성 → 제동·전환 → 전달 → 방출</span></div>'
+      +_eflowStrip
+      +_keyIssuesSection
+      +'<div class="sec-h">결과 상세 <span class="sh-sub">'+((vs.n||0)>0?'Rapsodo 실측 · '+vs.n+'구':'자료 없음')+'</span></div>'
+      +_rtiles
+      +'<h2 style="page-break-before:always">① 체력 — 구속의 바탕</h2><div class="lead">VALD 실측 · 규준 대비. 종합 점수 없이 축별 규준 위치(하위·중위·상위)로 봅니다. 매 투구의 직접 원인이 아닌 몸의 바탕입니다.</div>'
+      +'<div class="vsec"><div class="vsub">'+C.fitness+'</div>'+_valdBars+'</div>'+fitTrain
       +'<h2 style="page-break-before:always">② 메카닉 (투구 동작 분석)</h2><div class="lead">와인드업부터 공 방출까지 투구 동작을 5단계로 나눠 "어디서 힘을 만들고(생성) · 어떻게 전달하며(전달) · 어디에 저장하고(저장) · 어디에 부담이 가는지(부하)"를 봅니다. 카드 왼쪽 색 바는 단계 카테고리, 글자색은 상태(초록 양호 · 주황 주의 · 빨강 병목), 숫자는 100점 기준 점수입니다.</div>'
       +mechFigH+threeAxisHTML
       +edSection()
+      +_lbUtilH
       +_drillSection
       +_energyFlowSection
+      +_drivelineSection
       +'<h2 style="page-break-before:always">③ 제구와 구질 (랩소도)</h2><div class="lead">제구 = 공을 원하는 곳에 <b>반복해서 넣는 능력</b>(랩소도 실측 로케이션·스트라이크% 중심). 구질 = 랩소도로 측정한 공의 속도·회전 특성과 그 <b>반복성(안정성)</b>.</div>'
       +'<div class="card" style="margin-bottom:10px"><b>제구 종합 '+(cmd.score!=null?cmd.score:'—')+'점</b>'+'<div class="lead" style="margin:4px 0">랩소도 로케이션 일관성 '+(cmd.location_score!=null?cmd.location_score:'—')+'(주) · 동작 일관성 '+(cmd.mech_consistency!=null?cmd.mech_consistency:'—')+'(보조) · 스트라이크 '+(cmd.strike_pct!=null?cmd.strike_pct+'%':'—')+'(참고) ('+(cmd.n||0)+'구)</div>'+'<div class="lead">'+C.command+'</div>'
         +'<table class="ev-table" style="margin-top:8px"><thead><tr><th class="evl">랩소도 로케이션 (제구 주지표)</th><th>측정</th><th>점수</th></tr></thead><tbody>'
@@ -660,14 +848,15 @@
         +_mcRow('스트라이드 일관성',cmd.stride_score,'CV '+(cmd.stride_cv!=null?cmd.stride_cv:'—')+'%')
         +'</tbody></table>'
         +'<div class="lead" style="margin-top:6px">제구는 공이 한 곳에 모이는 정도(랩소도 로케이션 일관성)로 봅니다. 로케이션 일관성이 낮으면 같은 타겟에 반복해 던지는 드릴로 끌어올리세요. (스트라이크%는 불펜 캡처라 참고만)</div></div>'
-      +'<div class="card"><b>구질 (랩소도 '+(vs.n||0)+'구)</b><div class="qgrid">'
+      +'<div class="card"><b>'+((vs.n||0)>0?'구질 (랩소도 '+vs.n+'구)':'구질 (자료 없음)')+'</b><div class="qgrid">'
         +qk('구속 최고',_f(vs.max_kmh),'km/h')+qk('구속 평균',_f(vs.avg_kmh),'km/h')+qk('회전수',(vs.avg_spin!=null?vs.avg_spin:'—'),'rpm')
         +qk('회전효율',(vs.avg_eff!=null?vs.avg_eff:'—'),'%')+qk('회전축',(vs.spin_dir||'—'),'시계')+qk('구종',(vs.pitch_types?Object.keys(vs.pitch_types).length:'—'),'종')
         +'</div>'
         +'<div style="margin-top:8px;font-size:11.5px;font-weight:700;color:#41506a">구질 안정성 (투구 간 반복성 — 작을수록 일정)</div><div class="qgrid" style="margin-top:4px">'
         +qk('구속 변동(CV)',(vs.velo_cv!=null?vs.velo_cv:'—'),'%')+qk('회전수 변동(CV)',(vs.spin_cv!=null?vs.spin_cv:'—'),'%')+qk('회전효율 산포(SD)',(vs.eff_sd!=null?vs.eff_sd:'—'),'%')
         +'</div><div class="lead" style="margin-top:6px">'+(vs.pitch_types?'측정 구종: '+Object.keys(vs.pitch_types).map(function(k){return k+' '+vs.pitch_types[k]+'구';}).join(', ')+'. ':'')+'회전효율(Active Spin)이 높을수록 회전이 무브먼트로 잘 작용하고, 회전축(시계 방향)은 변화 방향을 결정합니다. 구속·회전 변동(CV)이 작을수록 매 투구 구질이 일정합니다 — 이는 제구가 아니라 구질의 반복성입니다.</div></div>'
-      +'<div class="note" style="margin-top:14px">'+C.closing+'</div></div></body></html>';
+      +(_AUD==="B"?(_bResearch+_rfootnote):"")
+      +'<div class="note" style="margin-top:14px">'+C.closing+'</div></div></body></html>'; /* [2026-08-13 ③ P3 §11.3] A형=선수·코치용 장비명 순화(no-methodology). */ if (_AUD !== "B") { _out = _out.replace(/Rapsodo/g, "측정").replace(/\uB7A9\uC18C\uB3C4/g, "\uACF5 \uCE21\uC815").replace(/force plate/gi, "\uD798 \uCE21\uC815").replace(/QUALISYS \u00B7 THEIA \u00B7 VISUAL3D/g, "BIOMOTION").replace(/THEIA \uD53C\uCE6D/g, "\uD53C\uCE6D").replace(/Theia|\uD14C\uC774\uC544|Visual3D|Qualisys/g, ""); } return _out;
   }
   return { buildPlayerHTML: buildPlayerHTML };
 });

@@ -133,12 +133,31 @@
     const overall_norm_pct = _npw > 0 ? Math.round(_nps / _npw) : null;
     let pv = null; if (sj_pp != null) pv = Math.round((PV.low_mph + (sj_pp - PV.low_w) * (PV.high_mph - PV.low_mph) / (PV.high_w - PV.low_w)) * 10) / 10;
     const pvk = pv ? Math.round(pv * 1.609 * 10) / 10 : null;
+    /* [2026-07-31] 좌우 비대칭 — 일괄 15%/10% 기준 폐기 → 항목별 p90 + 연구자 화면 전용.
+       근거: 허브 「인계·VALD 프레임 적용 4트랙」 §0-1(≥10% 해당률 절반 이상 = 정보량 0 ·
+             종단 재현 ρ=−.072) · §0-2-2(선수 노출 금지 · ICC/MDC 선결) · §2 실행 체크리스트.
+       임계 산출·검정은 _분석/asym_p90/compute_p90.py 참조:
+         IMTP 19.8 · CMJ 힘 15.9 = 허브 발행값(KU VALD 2026-03+06 합산 n=45/52) — 재현 완료
+         SJ 힘 20.7 · SJ 상승률 17.7 = 같은 원자료로 이 트랙이 산출(n=52)
+         ★CMJ 상승률(RFD)은 제외 — 허브 §2-3 명시 금지(중앙 28.0 · p90 73.9 · ≥10% 해당 74%)
+       ★키를 asymmetry_flags → asymmetry_research 로 바꿨다. 선수용 렌더러가 구 키로 켜지므로
+         키 변경만으로 선수 피드백 화면에서 자동으로 꺼진다. */
+    const ASYM_P90 = { '최대근력(IMTP)': 19.8, '점프 힘(CMJ)': 15.9,
+                       '스쿼트점프 힘(SJ)': 20.7, '스쿼트점프 상승률(SJ)': 17.7 };
     const asym = [];
-    [['cmj', 'asym_force_pct', 'CMJ Force Asym'], ['cmj', 'asym_rfd_pct', 'CMJ RFD Asym'], ['sj', 'asym_force_pct', 'SJ Force Asym'], ['sj', 'asym_rfd_pct', 'SJ RFD Asym'], ['imtp', 'asym_force_pct', 'IMTP Force Asym']].forEach(function (x) {
-      const v = (d[x[0]] || {})[x[1]]; if (v != null && Math.abs(v) >= 15) asym.push({ label: x[2], value: v, threshold: 15 }); else if (v != null && Math.abs(v) >= 10) asym.push({ label: x[2], value: v, threshold: 10, note: '주의 (10-15%)' }); });
+    [['imtp', 'asym_force_pct', '최대근력(IMTP)'], ['cmj', 'asym_force_pct', '점프 힘(CMJ)'],
+     ['sj', 'asym_force_pct', '스쿼트점프 힘(SJ)'], ['sj', 'asym_rfd_pct', '스쿼트점프 상승률(SJ)']].forEach(function (x) {
+      const v = (d[x[0]] || {})[x[1]]; if (v == null) return;
+      const a = Math.abs(v), thr = ASYM_P90[x[2]];
+      asym.push({ label: x[2], value: Math.round(a * 10) / 10, side: '', p90: thr, over: a >= thr });
+    });
+    const asymResearch = { researcher_only: true,
+      basis: 'IMTP·CMJ = 허브 발행값(KU VALD 2026-03+06 합산 p90 · n=45/52) · SJ = 같은 원자료에서 이 트랙이 산출(n=52)',
+      note: '항목별 p90 초과만 표기 — "상위 10%에 해당(참고)"이라는 뜻이지 이상·위험 판정이 아니다. 종단 재현이 안 돼 개인 피드백 근거로 쓰지 않는다. ICC/MDC 산출 전까지 연구자 화면 한정. CMJ 상승률(RFD)은 분포가 극단이라 제외.',
+      items: asym, over_count: asym.filter(function (f) { return f.over; }).length };
     return { name: name, bw_kg: Math.round(bw * 10) / 10, bw_lbs: Math.round(bw * 2.2046 * 10) / 10, test_date: d.test_date, axes: axes,
       overall_score: overall, overall_basis: 'dl6_hsavg', overall_norm_pct: overall_norm_pct, overall_cohort_pct: null,
-      predicted_velo_mph: pv, predicted_velo_kmh: pvk, asymmetry_flags: asym };
+      predicted_velo_mph: pv, predicted_velo_kmh: pvk, asymmetry_research: asymResearch };
   }
   function loadMasterFitness(text){
     const rows = readCSV(text); const by = {};
@@ -313,7 +332,7 @@
       var row = {
         meta: { trial_label: 'Trial ' + no, dt: t.setup.dt, fps: Math.round(1 / t.setup.dt), n_frames: t.setup.nFrames, weight_kg: wt, handedness: handed, throw_side: t.throw_side, glove_side: t.glove_side, ground_y_m: t.ground_y_m, viewer_origin_horiz0_m: t.viewer_origin_horiz0_m, viewer_origin_horiz1_m: t.viewer_origin_horiz1_m, axis_up: t.axis_up, horiz_axes: t.horiz_axes },
         events: t.events, times: Array.from({ length: t.setup.nFrames }, function (_, j) { return Math.round(j * t.setup.dt * 1000) / 1000; }),
-        frames: t.frames, x_factor: t.x_factor, series: t.series, kseq: t.kseq, grf: t.grf, scalars: t.scalars,
+        frames: t.frames, viewer_frames: t.viewer_frames, x_factor: t.x_factor, series: t.series, kseq: t.kseq, grf: t.grf, scalars: t.scalars,
         rapsodo: trialRapsodoFromPitch(no, rp),
         inefficiencies: {}, grf_metrics: t.grf_metrics || {}, fitness: {}, index: i, throwing_wrist_pos_available: t.throwing_wrist_pos_available
       };
@@ -501,6 +520,7 @@
       name:pl.name||'선수', arm:pl.handedness||'R', grade:pl.grade!=null?pl.grade:(DATA.grade!=null?DATA.grade:null),
       height_cm:pl.height_m?Math.round(pl.height_m*1000)/10:null, weight_kg:pl.weight_kg||null,
       mech:mech, comp_index:compIndex, phaseScores:phaseScores, counts:counts, weak:weak, corr3:corr3,
+      insufficient:(DATA.phases&&DATA.phases.measurement_insufficient)||null,  /* [2026-08-12 안건6] 점수 NA 사유 통과 */
       max_kmh:vs.max_kmh!=null?Math.round(vs.max_kmh*10)/10:(DATA.measured_kmh!=null?Math.round(DATA.measured_kmh*10)/10:null),
       avg_kmh:vs.avg_kmh!=null?Math.round(vs.avg_kmh*10)/10:null,
       spin:vs.avg_spin!=null?vs.avg_spin:null,

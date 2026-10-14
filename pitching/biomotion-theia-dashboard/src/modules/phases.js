@@ -652,7 +652,7 @@
       metrics: [
         M('골반 닫힘각 (코일)', r1(B.pelClose), '°', sc(B.pelClose, 46, 34, 1), 'KH 이전 골반이 셋업 대비 횡단면으로 꼬인(닫힌) 최대 각 — 골반 코일·적재의 운동학 지표(Pelvis_Angle_Z excursion). 클수록 깊은 코일. freeMo(꼬임 토크)와 상관.', 'pelClose', 1),
         M('뒷발 지면반력 꼬임 토크', r1(B.freeMo), 'N·m', sc(B.freeMo, 12, 6, 1), 'KH 이전 최대 꼬임 토크 = 뒷발 지면반력 프리모멘트(Mz) 음의 피크 크기(꼬임=−) — 골반 코일을 만드는 역학적 동력. 클수록 적재. (양의 토크는 KH 직전 열림/드라이브 시작)', 'freeMo', 1),
-        M('힙 힌지 형성 (저장 준비)', r1(B.hipHinge), '°', _scRk(B.hipHinge, 'hipHinge'), '니하이(KH)~앞발착지(FC) 드라이브 구간 축발 고관절 최대 굴곡 = "뒷고관절에 앉기" = 하체 코일 적재의 가시 지표. ★적정 범위 평가(깊을수록 우수 아님): 깊이↔구속·드라이브 무관(전 슬라이스 |r|≤0.23·NS, 엘리트 11~49° 광범위)이며, 깊이가 실제로 지표하는 것은 코일(골반·몸통 감김·닫힘 r≈+0.4)뿐 — COM·X-factor는 아님. 적재 실체는 코일 변인으로 확인. 엘리트 드라이브구간 범위 67.0~74.2°.', 'hipHinge', 'range'),
+        M('KH 시 몸통 기울기 (전후)', r1(B.trunkKH_fwd), '°', _scRk(B.trunkKH_fwd, 'trunkKH_fwd'), '무릎 최고점(KH) 시점 몸통 전후 기울기(Trunk_Angle_X) — 음수(−)=전경(앞으로 숙임), 양수(+)=후경. 와인드업 안정성 및 전진 준비 자세 지표(고려대 규준 반영).', 'trunkKH_fwd', 'range'),
         // ── 회전 에너지 저장(preload) — PI~KH · 엘리트 n=20 · 평가="엘리트 범위 적합"(부족<p25 / 엘리트범위 / 높음>p75), 클수록 좋음 아님 ──
         M('골반 닫힘각 (무릎 최고점)', r1(B.wuPelCloseKH), '°', _scRk(B.wuPelCloseKH, 'wuPelCloseKH'), '무릎 최고점(KH)에서 위에서 본 골반 방향 각(좌표 기준). 감긴 양과는 구분. 엘리트 범위에 가까운지로 평가.', 'wuPelCloseKH', 'range'),
         M('골반 감긴 양 (다리 들기~무릎 최고점)', r1(B.wuPelCoil), '°', _scRk(B.wuPelCoil, 'wuPelCoil'), '다리 들기~무릎 최고점 사이 골반이 반대로 감긴 변화량 = 와인드업 동안 감은 양.', 'wuPelCoil', 'range'),
@@ -871,8 +871,8 @@
     if (energyTransfer) {
       var magM = [
         (function(){ var m=M('어깨 에너지 생성 — X축(굴곡·신전) 성분', r1(B.shGen), 'J', null, '어깨 관절 에너지 생성 ∫P dt. [A5] load context — 몸통 전달 부족 시 어깨 보상 가능(arm MAP score 제외).', 'shGen', 1); m.neutral=true; return m; })(),
-        M('어깨 관절력으로 전달된 일 — 몸통→상완(관절력 경로 성분)', r1(B.shForceTransfer), 'J', _scRk(B.shForceTransfer,'shForceTransfer'), '어깨 관절력 파워(F·v)의 양(+) 적분 — 몸통 쪽에서 상완 쪽으로 관절력을 통해 들어간 일(J) · 관절력 경로 성분이며 몸통→팔 에너지 전달 전체가 아님 · 관절 토크 파워 경로는 포함하지 않고, 허리(L5/S1) 관절은 이 모델에 없음 · 적정범위 점수(엘리트 n=28 IQR · coach-blind 검증완료·2026-07-02 교수 승인)', 'shForceTransfer', 'range'),
-        M('팔꿈치 관절력으로 전달된 일 — 상완→전완(관절력 경로 성분)', r1(B.elForceTransfer), 'J', _scRk(B.elForceTransfer,'elForceTransfer'), '팔꿈치 관절력 파워(F·v)의 양(+) 적분 — 상완 쪽에서 전완 쪽으로 관절력을 통해 들어간 일(J) · 관절력 경로 성분이며 에너지 전달 전체가 아님 · 관절 토크 파워 경로는 포함하지 않음 · 적정범위 점수(엘리트 n=28)', 'elForceTransfer', 'range'),
+        M('어깨 관절력으로 전달된 에너지 — 몸통→상완(관절력 경로 성분)', r1(B.shForceTransfer), 'J', _scRk(B.shForceTransfer,'shForceTransfer'), '어깨 관절력 파워(F·v)의 양(+) 적분 — 몸통 쪽에서 상완 쪽으로 관절력을 통해 들어간 일(J) · 관절력 경로 성분이며 몸통→팔 에너지 전달 전체가 아님 · 관절 토크 파워 경로는 포함하지 않고, 허리(L5/S1) 관절은 이 모델에 없음 · 적정범위 점수(엘리트 n=28 IQR · coach-blind 검증완료·2026-07-02 교수 승인)', 'shForceTransfer', 'range'),
+        M('팔꿈치 관절력으로 전달된 에너지 — 상완→전완(관절력 경로 성분)', r1(B.elForceTransfer), 'J', _scRk(B.elForceTransfer,'elForceTransfer'), '팔꿈치 관절력 파워(F·v)의 양(+) 적분 — 상완 쪽에서 전완 쪽으로 관절력을 통해 들어간 일(J) · 관절력 경로 성분이며 에너지 전달 전체가 아님 · 관절 토크 파워 경로는 포함하지 않음 · 적정범위 점수(엘리트 n=28)', 'elForceTransfer', 'range'),
         (function(){ var m=M('팔꿈치 에너지 흡수 — X축(굴곡·신전) 성분', r1(B.elbAbs), 'J', null, '팔꿈치 감속 흡수 에너지. [A5] load context — 전달·방출 부족 시 팔꿈치 부담 신호(클수록 좋음 아님).', 'elbAbs', 'abs'); m.neutral=true; return m; })()
       ];
       var _SEQK = { '시퀀스 정확도':'seqPct', '채찍 가속 (팔/몸통)':'whipRatio', '운동사슬 타이밍':'chainTiming' };  // 그룹 기준 부여용 키

@@ -87,7 +87,7 @@
 
   function mapRangeToV1(bw) {
     if (!bw) return '보완';
-    if (bw === '부족' || bw === '미흡') return '결함';
+    if (bw === '부족' || bw === '체크필요') return '결함';
     if (bw === '높음') return '결함';
     if (bw === '우수' || bw === '엘리트 범위') return '우수';
     if (bw === '정상') return '보완';
@@ -95,7 +95,7 @@
   }
 
   function merLevelFromBand(bw) {
-    if (bw === '부족' || bw === '미흡') return 'low';
+    if (bw === '부족' || bw === '체크필요') return 'low';
     if (bw === '높음') return 'high';
     return 'adequate';
   }

@@ -71,17 +71,17 @@
   function mapBandToV1(bw, judgmentKey, dir) {
     if (!bw) return '보완';
     if (judgmentKey === 'lead_knee_flexion_change_fc_br' || dir === -1) {
-      if (bw === '높음' || bw === '미흡' || bw === '부족') return '결함';
+      if (bw === '높음' || bw === '체크필요' || bw === '부족') return '결함';
       if (bw === '우수') return '우수';
       return '보완';
     }
     if (dir === 'range') {
-      if (bw === '부족' || bw === '미흡') return '결함';
+      if (bw === '부족' || bw === '체크필요') return '결함';
       if (bw === '높음') return '결함';
       if (bw === '우수' || bw === '엘리트 범위') return '우수';
       return '보완';
     }
-    if (bw === '미흡' || bw === '부족' || bw === '높음') return '결함';
+    if (bw === '체크필요' || bw === '부족' || bw === '높음') return '결함';
     if (bw === '우수') return '우수';
     return '보완';
   }

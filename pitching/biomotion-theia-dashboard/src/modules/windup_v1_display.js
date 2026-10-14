@@ -83,21 +83,21 @@
   function mapBandToV1(bw, judgmentKey) {
     if (!bw) return '보완';
     if (judgmentKey === 'early_uncoiling_index') {
-      if (bw === '높음' || bw === '미흡' || bw === '부족') return '결함';
+      if (bw === '높음' || bw === '체크필요' || bw === '부족') return '결함';
       if (bw === '우수') return '우수';
       return '보완';
     }
     if (judgmentKey === 'kh_closed_angle_combined') {
-      if (bw === '부족' || bw === '미흡' || bw === '높음') return '결함';
+      if (bw === '부족' || bw === '체크필요' || bw === '높음') return '결함';
       if (bw === '우수') return '우수';
       return '보완';
     }
     if (judgmentKey === 'windup_coil_rom_start_to_kh') {
-      if (bw === '부족' || bw === '미흡') return '결함';
+      if (bw === '부족' || bw === '체크필요') return '결함';
       if (bw === '우수' || bw === '높음') return '우수';
       return '보완';
     }
-    if (bw === '미흡' || bw === '부족' || bw === '높음') return '결함';
+    if (bw === '체크필요' || bw === '부족' || bw === '높음') return '결함';
     if (bw === '우수') return '우수';
     return '보완';
   }

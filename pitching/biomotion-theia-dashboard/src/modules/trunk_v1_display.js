@@ -46,7 +46,7 @@
 
   function mapBandToV1(bw) {
     if (!bw) return '보완';
-    if (bw === '미흡' || bw === '부족') return '결함';
+    if (bw === '체크필요' || bw === '부족') return '결함';
     if (bw === '우수') return '우수';
     return '보완';
   }
